@@ -1,6 +1,7 @@
 {
   "name": "learn-by-doing",
   "owner": { "name": "joshrubio" },
+  "metadata": { "description": "Learn by Doing: turns the commits Claude makes into short lessons you study later." },
   "plugins": [
     {
       "name": "learn-by-doing",

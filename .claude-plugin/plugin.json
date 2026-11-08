@@ -2,6 +2,9 @@
   "name": "learn-by-doing",
   "version": "0.4.0",
   "description": "Turns every git commit Claude makes into short lessons you study later in your own study space.",
+  "author": { "name": "Joshue Rubio", "url": "https://github.com/joshrubio" },
+  "homepage": "https://github.com/joshrubio/learn-by-doing",
+  "repository": "https://github.com/joshrubio/learn-by-doing",
   "license": "MIT",
   "keywords": ["learning", "education", "tutor", "vibe-coding"]
 }
