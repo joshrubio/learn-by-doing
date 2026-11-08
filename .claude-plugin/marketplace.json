@@ -1,0 +1,11 @@
+{
+  "name": "learn-by-doing",
+  "owner": { "name": "joshrubio" },
+  "plugins": [
+    {
+      "name": "learn-by-doing",
+      "source": "./",
+      "description": "Turns every git commit Claude makes into short lessons you study later in your own study space."
+    }
+  ]
+}

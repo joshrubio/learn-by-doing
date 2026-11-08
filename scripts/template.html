@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Espacio de estudio</title>
+<style>
+:root{--bg:#faf9f6;--card:#fff;--ink:#1f2328;--muted:#6b7280;--line:#e5e2da;--accent:#2f6f5e;--accent-ink:#fff;--code:#f3f1ea;--ok:#2e7d4f;--bad:#b3402f;--warn:#a06a10}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#16181a;--card:#1f2224;--ink:#e8e6e1;--muted:#9aa0a6;--line:#33373a;--accent:#6fbfa8;--accent-ink:#10201b;--code:#15181a;--ok:#6fcf97;--bad:#f08a78;--warn:#e0b25a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,Segoe UI,sans-serif}
+.wrap{max-width:820px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:1.4rem;margin:0}
+.sub{color:var(--muted);margin:2px 0 18px}
+nav{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:16px;flex-wrap:wrap}
+nav button{background:none;border:0;border-bottom:2px solid transparent;padding:10px 14px;font:inherit;color:var(--muted);cursor:pointer}
+nav button[aria-selected="true"]{color:var(--ink);border-color:var(--accent);font-weight:600}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:4px 12px;font:inherit;font-size:.85rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.group{margin:22px 0 8px;color:var(--muted);font-size:.85rem}
+.group b{color:var(--ink)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:12px}
+.card h3{margin:6px 0 10px;font-size:1.05rem}
+.meta{display:flex;gap:8px;flex-wrap:wrap;font-size:.78rem;color:var(--muted)}
+.tag{border:1px solid var(--line);border-radius:4px;padding:1px 7px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow:auto;font:13px/1.5 ui-monospace,Consolas,monospace;margin:8px 0}
+.file{font:12px ui-monospace,Consolas,monospace;color:var(--muted)}
+textarea{width:100%;min-height:64px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;resize:vertical}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:8px 14px;font:inherit;cursor:pointer;margin-top:8px}
+.opt{display:block;width:100%;text-align:left;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px 12px;margin:6px 0;font:inherit;cursor:pointer}
+.opt:hover:enabled{border-color:var(--accent)}
+.opt.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
+.opt.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)}
+.label{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:14px 0 4px}
+.why{border-left:3px solid var(--accent);padding:2px 12px;margin-top:8px;color:var(--ink)}
+.empty{color:var(--muted);text-align:center;padding:40px 0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:20px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
+.stat b{display:block;font-size:1.5rem}
+.bar{height:8px;background:var(--code);border-radius:4px;overflow:hidden;display:flex;margin:4px 0 12px}
+.bar i{display:block;height:100%}
+.row{display:flex;justify-content:space-between;font-size:.9rem}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="title">Espacio de estudio</h1>
+  <p class="sub" id="sub"></p>
+  <nav role="tablist" id="tabs"></nav>
+  <main id="view"></main>
+</div>
+<script id="data" type="application/json">/*DATA*/null</script>
+<script>
+const DATA = JSON.parse(document.getElementById('data').textContent);
+const KEY = 'lbd:' + DATA.project;
+const DAY = 86400000;
+const INTERVALS = [1, 3, 7, 16, 35];
+const TYPE_LABEL = { concepto: 'Concepto', decision: 'Decisión', riesgo: 'Riesgo', lectura: 'Lectura' };
+const STATE_LABEL = { nuevo: 'Nuevo', aprendiendo: 'Aprendiendo', oxidado: 'Oxidado', dominado: 'Dominado' };
+const STATE_COLOR = { nuevo: 'var(--muted)', aprendiendo: 'var(--accent)', oxidado: 'var(--warn)', dominado: 'var(--ok)' };
+
+let memory = {};
+function loadProgress() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return memory; } }
+function saveProgress(p) { memory = p; try { localStorage.setItem(KEY, JSON.stringify(p)); } catch {} }
+let progress = loadProgress();
+
+function stateOf(l) {
+  const p = progress[l.id];
+  if (!p || !p.done) return 'nuevo';
+  if (p.due <= Date.now()) return 'oxidado';
+  return p.box >= 3 ? 'dominado' : 'aprendiendo';
+}
+function record(l, correct) {
+  const p = progress[l.id] || { box: 0 };
+  p.box = correct ? Math.min((p.box || 0) + 1, INTERVALS.length - 1) : 0;
+  p.done = true;
+  p.due = Date.now() + INTERVALS[p.box] * DAY;
+  progress[l.id] = p;
+  saveProgress(progress);
+}
+
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'class') el.className = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(kid));
+  return el;
+}
+
+let tab = 'pendientes';
+let areaFilter = 'todas';
+const areas = [...new Set(DATA.lessons.map((l) => l.area))].sort();
+
+function meta(l) {
+  return h('div', { class: 'meta' }, h('span', { class: 'tag' }, TYPE_LABEL[l.type] || l.type), h('span', { class: 'tag' }, l.area), h('span', { class: 'tag' }, STATE_LABEL[stateOf(l)]));
+}
+function codeBlock(l) {
+  return h('div', {}, l.code.file ? h('div', { class: 'file' }, l.code.file) : null, h('pre', {}, l.code.text));
+}
+function quiz(l, onDone) {
+  const box = h('div');
+  let answered = false;
+  const result = h('div');
+  l.check.options.forEach((text, i) => {
+    const b = h('button', { class: 'opt', onclick: () => {
+      if (answered) return;
+      answered = true;
+      const ok = i === l.check.answer;
+      b.classList.add(ok ? 'ok' : 'bad');
+      if (!ok) box.children[l.check.answer + 1].classList.add('ok');
+      record(l, ok);
+      result.append(h('div', { class: 'why' }, (ok ? 'Correcto. ' : 'No exactamente. ') + l.check.why));
+      if (onDone) result.append(h('button', { class: 'btn', onclick: onDone }, 'Continuar'));
+    } }, text);
+    box.append(b);
+  });
+  box.prepend(h('div', {}, l.check.question));
+  box.append(result);
+  return box;
+}
+
+function newCard(l) {
+  const reveal = h('div', { class: 'hidden' });
+  const guess = h('textarea', { placeholder: 'Escribe tu predicción antes de ver la explicación' });
+  const btn = h('button', { class: 'btn', onclick: () => { reveal.classList.remove('hidden'); btn.classList.add('hidden'); } }, 'Ver explicación');
+  reveal.append(
+    h('div', { class: 'label' }, 'El concepto'), h('div', {}, l.explain),
+    h('div', { class: 'label' }, 'Reto'), h('div', {}, l.challenge),
+    h('div', { class: 'label' }, 'Comprobación'), quiz(l, render),
+  );
+  if (l.related.length) reveal.append(h('div', { class: 'label' }, 'Relacionado'), h('div', { class: 'meta' }, l.related.map((r) => h('span', { class: 'tag' }, r))));
+  return h('div', { class: 'card' }, meta(l), h('h3', {}, l.title), codeBlock(l),
+    h('div', { class: 'label' }, 'Antes de leer, predice'), h('div', {}, l.predict), guess, btn, reveal);
+}
+
+function viewPendientes() {
+  const list = DATA.lessons.filter((l) => stateOf(l) === 'nuevo' && (areaFilter === 'todas' || l.area === areaFilter));
+  const root = h('div');
+  root.append(chips());
+  if (!list.length) return root.append(h('div', { class: 'empty' }, 'No tienes lecciones pendientes. Haz más commits con Claude y vuelve.')) || root;
+  const groups = {};
+  list.forEach((l) => (groups[l.commit.hash] = groups[l.commit.hash] || []).push(l));
+  for (const [hash, ls] of Object.entries(groups)) {
+    root.append(h('div', { class: 'group' }, h('b', {}, hash || 'sin commit'), ' · ', ls[0].commit.message));
+    ls.forEach((l) => root.append(newCard(l)));
+  }
+  return root;
+}
+
+function viewRepaso() {
+  const list = DATA.lessons.filter((l) => stateOf(l) === 'oxidado' && (areaFilter === 'todas' || l.area === areaFilter));
+  const root = h('div');
+  root.append(chips());
+  if (!list.length) return root.append(h('div', { class: 'empty' }, 'Nada que repasar por ahora. Los conceptos aparecen aquí cuando toca recordarlos.')) || root;
+  list.forEach((l) => root.append(h('div', { class: 'card' }, meta(l), h('h3', {}, l.title), codeBlock(l), quiz(l, render))));
+  return root;
+}
+
+function viewProgreso() {
+  const root = h('div');
+  const counts = { nuevo: 0, aprendiendo: 0, oxidado: 0, dominado: 0 };
+  DATA.lessons.forEach((l) => counts[stateOf(l)]++);
+  root.append(h('div', { class: 'stats' }, Object.keys(counts).map((k) => h('div', { class: 'stat' }, h('b', {}, String(counts[k])), STATE_LABEL[k]))));
+  root.append(h('div', { class: 'label' }, 'Por área'));
+  areas.forEach((a) => {
+    const ls = DATA.lessons.filter((l) => l.area === a);
+    const c = { nuevo: 0, aprendiendo: 0, oxidado: 0, dominado: 0 };
+    ls.forEach((l) => c[stateOf(l)]++);
+    root.append(h('div', { class: 'row' }, h('span', {}, a), h('span', {}, `${c.dominado}/${ls.length} dominadas`)),
+      h('div', { class: 'bar' }, Object.keys(c).map((k) => h('i', { style: `width:${(c[k] / ls.length) * 100}%;background:${STATE_COLOR[k]}` }))));
+  });
+  root.append(h('p', { class: 'sub' }, 'Tu progreso se guarda en este navegador. Si abres el archivo desde otra ruta o navegador empezará de cero.'));
+  return root;
+}
+
+function chips() {
+  return h('div', { class: 'chips' }, ['todas', ...areas].map((a) => h('button', { class: 'chip', 'aria-pressed': String(areaFilter === a), onclick: () => { areaFilter = a; render(); } }, a)));
+}
+
+function render() {
+  const pend = DATA.lessons.filter((l) => stateOf(l) === 'nuevo').length;
+  const rep = DATA.lessons.filter((l) => stateOf(l) === 'oxidado').length;
+  document.getElementById('sub').textContent = `${DATA.project} · ${DATA.lessons.length} lecciones`;
+  const tabs = [['pendientes', `Pendientes (${pend})`], ['repaso', `Repaso (${rep})`], ['progreso', 'Progreso']];
+  const nav = document.getElementById('tabs');
+  nav.replaceChildren(...tabs.map(([id, label]) => h('button', { role: 'tab', 'aria-selected': String(tab === id), onclick: () => { tab = id; render(); } }, label)));
+  const view = document.getElementById('view');
+  view.replaceChildren(tab === 'pendientes' ? viewPendientes() : tab === 'repaso' ? viewRepaso() : viewProgreso());
+}
+render();
+</script>
+</body>
+</html>
