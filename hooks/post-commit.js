@@ -24,6 +24,23 @@ function areaOf(file) {
   return /\.(js|ts|mjs|cjs)$/i.test(file) ? 'codigo' : 'otros';
 }
 
+/* Notes that are new or edited since the last sync. Cheap: a few small files. */
+function pendingNotes() {
+  try {
+    const notes = require(path.join(__dirname, '..', 'scripts', 'notes.js'));
+    const dir = shared.lessonsDir();
+    const sync = shared.readState().sync || {};
+    let n = 0;
+    for (const f of fs.readdirSync(dir)) {
+      if (!f.endsWith('.md')) continue;
+      const text = fs.readFileSync(path.join(dir, f), 'utf8');
+      const id = notes.splitFrontmatter(text).data.id;
+      if (!id || !sync[id] || sync[id].hash !== notes.hashOf(text)) n++;
+    }
+    return n;
+  } catch { return 0; }
+}
+
 const out = (context) => process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: context } }));
 const fwd = (p) => p.replace(/\\/g, '/');
 const list = (a) => (a && a.length ? a.join(', ') : 'none');
@@ -145,7 +162,7 @@ function main(raw) {
     '',
     'Follow the learn-by-doing skill now, silently, without interrupting the user: pick the lessons worth teaching from this commit and save them with the save_lessons tool of the learn-by-doing MCP server, using:',
     `  project: "${fwd(cwd)}"   commit: { "hash": "${hash}", "message": ${JSON.stringify(message)} }`,
-    'Then add one short line at the end of your reply, like "N lessons saved from this commit, open them with /study". Do not explain the lessons in chat.',
+    `Notes waiting to be synced before this commit: ${pendingNotes()}. After saving, end your reply with one short line in the user's language: how many lessons this commit added and the new total waiting to sync (the number above plus the lessons actually saved; a concept that already had a note adds none), and that /study syncs them. Example: "2 lecciones guardadas, 7 pendientes de sincronizar. Ejecuta /study." Do not explain the lessons in chat.`,
     '',
     '--- patch ---',
     patchText,

@@ -9,7 +9,7 @@ Goal: the user is learning to code by working with AI. Most of the code is writt
 
 ## When it runs
 
-A hook adds a `[learn-by-doing]` message after a commit, with the commit hash, size, changed areas, the learner profile and the patch. Follow it silently, save the lessons, then end your reply with one line saying how many were saved and that `/study` opens them.
+A hook adds a `[learn-by-doing]` message after a commit, with the commit hash, size, changed areas, the learner profile and the patch. Follow it silently, save the lessons, then end your reply with one line in the user's language saying how many lessons were saved and how many are now waiting to sync in total (the hook message gives the count before this commit), and that `/study` syncs them.
 
 ## Where things live
 
