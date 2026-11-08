@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-const { execFileSync } = require('child_process');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
+const shared = require(path.join(__dirname, '..', 'scripts', 'shared.js'));
 
 const COMMIT_CMD = /\bgit\s+(?:-C\s+\S+\s+|-c\s+\S+\s+)*commit\b/;
 const COMMIT_OUT = /\[[^\]\n]+\s[0-9a-f]{7,}\]/;
@@ -22,8 +21,18 @@ function areaOf(file) {
   return /\.(js|ts|mjs|cjs)$/i.test(file) ? 'codigo' : 'otros';
 }
 
-function git(cwd, args) {
-  return execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+const out = (context) => process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: context } }));
+const fwd = (p) => p.replace(/\\/g, '/');
+
+function askMessage(proj, cwd, hash, message, lbd) {
+  return [
+    `[learn-by-doing] A commit was just made in a repo the user has not decided about yet: ${proj.name} (${hash} "${message}").`,
+    'Do not write any lessons yet. Ask the user once, in their language, with the AskUserQuestion tool:',
+    `"¿Quieres que Learn by Doing aprenda de los commits de ${proj.name}?" with two options: "Sí, en este repo" and "No, nunca aquí".`,
+    'Tell them in one sentence that lessons are generated from the code of each commit and, when they run /study, snippets are uploaded to their own private study space. If this repo belongs to an employer or client, they should check that this is allowed.',
+    `Then run: node "${lbd}" repo enable --project "${fwd(cwd)}"   (or "repo disable" for the second option).`,
+    `If they said yes, read this commit with: git -C "${fwd(cwd)}" show ${hash}   and continue as the learn-by-doing skill describes, saving the lessons now. If they said no, say nothing more about it.`,
+  ].join('\n');
 }
 
 function main(raw) {
@@ -32,19 +41,28 @@ function main(raw) {
   if (input.tool_name !== 'Bash') return;
   const command = (input.tool_input && input.tool_input.command) || '';
   if (!COMMIT_CMD.test(command)) return;
-  const out = typeof input.tool_response === 'string' ? input.tool_response : JSON.stringify(input.tool_response || '');
-  if (!COMMIT_OUT.test(out)) return;
+  const response = typeof input.tool_response === 'string' ? input.tool_response : JSON.stringify(input.tool_response || '');
+  if (!COMMIT_OUT.test(response)) return;
 
   const cwd = input.cwd || process.cwd();
-  const lbdHome = process.env.LBD_HOME || path.join(os.homedir(), '.learn-by-doing');
-  if (fs.existsSync(path.join(lbdHome, 'off')) || fs.existsSync(path.join(cwd, '.learn-off'))) return;
+  if (fs.existsSync(path.join(shared.home(), 'off')) || fs.existsSync(path.join(cwd, '.learn-off'))) return;
 
-  let hash, message, numstat, patch;
+  const lbd = fwd(path.join(__dirname, '..', 'scripts', 'lbd.js'));
+  const proj = shared.identify(cwd);
+  const entry = shared.readState().projects[proj.slug];
+  if (entry && entry.learn === false) return;
+
+  let hash, message;
   try {
-    hash = git(cwd, ['rev-parse', '--short', 'HEAD']).trim();
-    message = git(cwd, ['log', '-1', '--format=%s']).trim();
-    numstat = git(cwd, ['show', 'HEAD', '--numstat', '--format=']).trim().split('\n').filter(Boolean);
-    patch = git(cwd, ['show', 'HEAD', '--format=', '--unified=2', '--no-color']);
+    hash = shared.git(cwd, ['rev-parse', '--short', 'HEAD']).trim();
+    message = shared.git(cwd, ['log', '-1', '--format=%s']).trim();
+  } catch { return; }
+  if (!entry || entry.learn !== true) return out(askMessage(proj, cwd, hash, message, lbd));
+
+  let numstat, patch;
+  try {
+    numstat = shared.git(cwd, ['show', 'HEAD', '--numstat', '--format=']).trim().split('\n').filter(Boolean);
+    patch = shared.git(cwd, ['show', 'HEAD', '--format=', '--unified=2', '--no-color']);
   } catch { return; }
 
   const files = numstat.map((l) => {
@@ -71,23 +89,17 @@ function main(raw) {
       return !m || !LOW_SIGNAL.test(m[1]);
     })
     .join('');
-  const truncated = patch.length > MAX_PATCH;
-  const patchText = truncated ? patch.slice(0, MAX_PATCH) + '\n... [patch truncated, use git show for the rest]' : patch;
-  const lbd = path.join(__dirname, '..', 'scripts', 'lbd.js').replace(/\\/g, '/');
+  const patchText = patch.length > MAX_PATCH ? patch.slice(0, MAX_PATCH) + '\n... [patch truncated, use git show for the rest]' : patch;
 
-  let profileLines = [];
-  try {
-    const { readProfile } = require(path.join(__dirname, '..', 'scripts', 'shared.js'));
-    const p = readProfile();
-    profileLines = [
-      `Learner profile${p.isDefault ? ' (no profile set yet, defaults)' : ''}: allowed exercise modalities = ${p.modalities.join(', ')}.`,
-      p.level ? `Level: ${p.level}.` : '',
-      p.known.length ? `Known concepts, skip them: ${p.known.join(', ')}.` : '',
-      p.rusty.length ? `Rusty concepts, teach as a short refresher: ${p.rusty.join(', ')}.` : '',
-    ].filter(Boolean);
-  } catch {}
+  const p = shared.readProfile();
+  const profileLines = [
+    `Learner profile${p.isDefault ? ' (no profile set yet, defaults)' : ''}: allowed exercise modalities = ${p.modalities.join(', ')}.`,
+    p.level ? `Level: ${p.level}.` : '',
+    p.known.length ? `Known concepts, skip them: ${p.known.join(', ')}.` : '',
+    p.rusty.length ? `Rusty concepts, teach as a short refresher: ${p.rusty.join(', ')}.` : '',
+  ].filter(Boolean);
 
-  const context = [
+  out([
     `[learn-by-doing] A commit was just made: ${hash} "${message}".`,
     ...profileLines,
     `Size: ${useful.length} file(s), ${lines} line(s) changed${large ? ' -> LARGE commit, apply the large-commit rule' : ''}.`,
@@ -95,16 +107,12 @@ function main(raw) {
     areaList,
     '',
     'Follow the learn-by-doing skill now, silently, without interrupting the user: pick the lessons worth teaching from this commit and save them with:',
-    `  node "${lbd}" add --project "${cwd.replace(/\\/g, '/')}"   (lesson JSON on stdin)`,
+    `  node "${lbd}" add --project "${fwd(cwd)}"   (lesson JSON on stdin)`,
     'Then add one short line at the end of your reply, like "N lessons saved from this commit, open them with /study". Do not explain the lessons in chat.',
     '',
     '--- patch ---',
     patchText,
-  ].join('\n');
-
-  process.stdout.write(JSON.stringify({
-    hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: context },
-  }));
+  ].join('\n'));
 }
 
 let data = '';

@@ -220,7 +220,7 @@ async function record(l,result){
 }
 const sorted=()=>[...S.lessons].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
 const projectsOf=()=>{const m={};S.lessons.forEach(l=>{(m[l.project]=m[l.project]||{name:l.projectName||l.project,lessons:[]}).lessons.push(l)});return m;};
-const appearancesOf=(l)=>{const set=new Set([l.project]);S.apps.filter(a=>a.concept===l.id).forEach(a=>set.add(a.project));return set.size;};
+const appearancesOf=(l)=>{const set=new Set([l.project]);(l.appearances||[]).forEach(a=>set.add(String(a).split('@')[0]));return set.size;};
 
 const exerciseOf=(l)=>l.exercise||null;
 
@@ -678,7 +678,6 @@ async function boot(){
     clearTimeout(timer);S.slow=false;S.loaded=true;
     S.lessons=snap.docs.map(d=>({...d.data(),id:d.id}));render();
   },fail);
-  db.collection('appearances').onSnapshot((snap)=>{S.apps=snap.docs.map(d=>d.data());render();},()=>{});
   if(S.uid){
     db.collection('data/users/'+S.uid).onSnapshot((snap)=>{
       const p={};let prof=null;

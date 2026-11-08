@@ -13,7 +13,11 @@ A hook adds a `[learn-by-doing]` message after a commit, with the commit hash, s
 
 ## Where things live
 
-Everything is stored centrally in `~/.learn-by-doing/` (or `$LBD_HOME`), shared by all projects, so concepts and progress carry across repos. The study space is an Artifact that `/study` creates and syncs.
+Lessons are Markdown notes with frontmatter, one file per concept, in `~/.learn-by-doing/notes/lessons/<concept>.md` (the folder can be moved with `config set notesDir <path>`, for example into an Obsidian vault). They are shared by all projects, so concepts carry across repos. The user may edit or delete notes by hand. The study space is an Artifact that `/study` creates and syncs from the notes. Never write the note files yourself, always go through `lbd.js add`, which validates them.
+
+## Repos the user has not decided about
+
+The plugin only learns from repos the user turned on. When a hook message says the repo has not been decided yet, it asks you to ask the user once and then run `lbd.js repo enable` or `repo disable`. Follow that message exactly and write no lessons until the user says yes. Never enable a repo on your own, never ask again for a repo that was disabled, and never write lessons for one. The user can change it later with `/learn-repo`.
 
 ## The learner profile
 
@@ -125,7 +129,7 @@ EOF
 
 `area` is one of: frontend, backend, base-de-datos, tests, config, codigo, docs, otros. `concept` is a short kebab-case slug, stable across commits and projects so repeats are detected. For a commit from the past (history mode) add `"date": "YYYY-MM-DD"` to `commit`. The script rejects invalid lessons and prints why, fix and resend.
 
-Saved lessons wait locally until the user runs `/study`, which syncs them to the study space in one batch. Never call the Artifact or ArtifactData tools from a commit hook turn.
+Each lesson becomes a note file. If the concept already has a note, the script records the new project and commit as an appearance inside the existing note instead of creating a duplicate. Saved lessons wait locally until the user runs `/study`, which syncs new and edited notes to the study space in one batch. Never call the Artifact or ArtifactData tools from a commit hook turn.
 
 ## Privacy
 

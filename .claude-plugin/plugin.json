@@ -1,6 +1,6 @@
 {
   "name": "learn-by-doing",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Turns every git commit Claude makes into short lessons you study later in your own study space.",
   "license": "MIT",
   "keywords": ["learning", "education", "tutor", "vibe-coding"]

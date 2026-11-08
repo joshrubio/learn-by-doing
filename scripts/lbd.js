@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const S = require('./shared');
+const N = require('./notes');
 
-const { MODALITIES, readProfile } = require('./shared');
-
+const { MODALITIES } = S;
 const TYPES = ['concepto', 'decision', 'riesgo', 'lectura'];
 const AREAS = ['frontend', 'backend', 'base-de-datos', 'tests', 'config', 'codigo', 'docs', 'otros'];
 const MAX_PER_COMMIT = 4;
@@ -17,37 +16,10 @@ const flag = (name) => {
   const i = argv.indexOf(`--${name}`);
   return i > -1 ? argv[i + 1] : undefined;
 };
-const home = process.env.LBD_HOME || path.join(os.homedir(), '.learn-by-doing');
-const storeFile = path.join(home, 'store.json');
-const configFile = path.join(home, 'config.json');
-const outbox = path.join(home, 'outbox');
 const project = path.resolve(flag('project') || process.env.LBD_PROJECT || process.cwd());
-
-function readJson(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
-}
-function writeJson(file, data) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
-}
-const load = () => readJson(storeFile, { version: 2, projects: {}, lessons: [], appearances: [] });
-const save = (d) => writeJson(storeFile, d);
+const outbox = () => path.join(S.home(), 'outbox');
 const str = (v) => typeof v === 'string' && v.trim().length > 0;
-const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'proyecto';
 const fail = (msg) => { console.error(`lbd: ${msg}`); process.exit(1); };
-
-function git(dir, args) {
-  return execFileSync('git', args, { cwd: dir, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
-}
-
-function identify(dir) {
-  let remote = '';
-  try { remote = git(dir, ['remote', 'get-url', 'origin']).trim(); } catch {}
-  const m = remote.match(/[:/]([^/:]+\/[^/]+?)(?:\.git)?$/);
-  const name = m ? m[1].split('/')[1] : path.basename(dir);
-  const slug = slugify(m ? m[1].replace('/', '-') : path.basename(dir));
-  return { slug, name, remote, dir: dir.replace(/\\/g, '/') };
-}
 
 function readStdin() {
   return new Promise((resolve) => {
@@ -58,6 +30,22 @@ function readStdin() {
   });
 }
 
+/* ---------- reading notes ---------- */
+function allLessons({ warn = true } = {}) {
+  const dir = S.lessonsDir();
+  let files = [];
+  try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.md')); } catch { return []; }
+  const out = [];
+  for (const f of files) {
+    const text = fs.readFileSync(path.join(dir, f), 'utf8');
+    const r = N.markdownToLesson(text);
+    if (r.error || !r.lesson.id) { if (warn) console.error(`lbd: skipped ${f}: ${r.error || 'missing id in frontmatter'}`); continue; }
+    out.push({ ...r.lesson, file: path.join(dir, f), hash: N.hashOf(text) });
+  }
+  return out;
+}
+
+/* ---------- validation ---------- */
 function validate(l, i) {
   const errs = [];
   if (!TYPES.includes(l.type)) errs.push(`type must be one of ${TYPES.join(', ')}`);
@@ -76,7 +64,7 @@ function validateExercise(e) {
   if (!e || typeof e !== 'object') return ['exercise is required'];
   const meta = MODALITIES[e.modality];
   if (!meta) return [`exercise.modality must be one of ${Object.keys(MODALITIES).join(', ')}`];
-  const profile = readProfile();
+  const profile = S.readProfile();
   if (!profile.modalities.includes(e.modality)) return [`exercise.modality "${e.modality}" is not enabled for this user. Enabled: ${profile.modalities.join(', ')}`];
   const errs = [];
   if (!str(e.prompt)) errs.push('exercise.prompt is required');
@@ -101,6 +89,7 @@ function cleanExercise(e) {
   return out;
 }
 
+/* ---------- commands ---------- */
 async function add() {
   let input;
   try { input = JSON.parse(await readStdin()); } catch { fail('stdin is not valid JSON'); }
@@ -110,62 +99,76 @@ async function add() {
   const problems = lessons.map(validate).filter(Boolean);
   if (problems.length) fail(problems.join('\n'));
 
-  const data = load();
-  const proj = identify(project);
-  const commit = input.commit || {};
+  const state = S.readState();
+  const proj = S.identify(project);
+  const known = state.projects[proj.slug] || {};
+  if (known.learn === false) fail(`learning is turned off for ${proj.name}. Run "repo enable" only if the user asks for it`);
   const now = new Date().toISOString();
-  const known = data.projects[proj.slug];
-  data.projects[proj.slug] = { name: proj.name, path: proj.dir, remote: proj.remote, firstSeen: known ? known.firstSeen : now, lastSeen: now };
+  state.projects[proj.slug] = { ...known, name: proj.name, path: proj.dir, remote: proj.remote, firstSeen: known.firstSeen || now, lastSeen: now };
 
+  const commit = input.commit || {};
+  const dir = S.lessonsDir();
+  fs.mkdirSync(dir, { recursive: true });
   let added = 0, repeated = 0;
   for (const l of lessons) {
-    const dup = data.lessons.find((x) => x.id === l.concept);
-    if (dup) {
-      const key = `${l.concept}__${proj.slug}__${commit.hash || 'none'}`;
-      if (!data.appearances.some((a) => a.id === key)) {
-        data.appearances.push({ id: key, concept: l.concept, project: proj.slug, projectName: proj.name, commit: { hash: commit.hash || '', message: commit.message || '' }, at: now, synced: false });
-      }
+    const file = path.join(dir, `${l.concept}.md`);
+    if (fs.existsSync(file)) {
+      const text = fs.readFileSync(file, 'utf8');
+      const { data, body } = N.splitFrontmatter(text);
+      const key = `${proj.slug}@${commit.hash || 'none'}@${(commit.date || now).slice(0, 10)}`;
+      const list = Array.isArray(data.appearances) ? data.appearances : [];
+      const dup = list.some((a) => a.split('@').slice(0, 2).join('@') === `${proj.slug}@${commit.hash || 'none'}`) || (data.project === proj.slug && data.commit === commit.hash);
+      if (!dup) fs.writeFileSync(file, N.joinFrontmatter({ ...data, appearances: [...list, key] }, body));
       repeated++;
       continue;
     }
-    data.lessons.push({
-      id: l.concept,
-      createdAt: now,
-      project: proj.slug,
-      projectName: proj.name,
+    fs.writeFileSync(file, N.lessonToMarkdown({
+      id: l.concept, createdAt: now, project: proj.slug, projectName: proj.name,
       commit: { hash: commit.hash || '', message: commit.message || '', date: commit.date || '' },
-      context: { building: l.context.building, snippetRole: l.context.snippetRole, learning: l.context.learning },
-      type: l.type, area: l.area, concept: l.concept, title: l.title,
-      code: { file: (l.code.file || '').toString(), text: l.code.text },
-      predict: l.predict, explain: l.explain,
-      exercise: cleanExercise(l.exercise),
-      related: Array.isArray(l.related) ? l.related.filter(str) : [],
-      example: l.example === true,
-      synced: false,
-    });
+      context: l.context, type: l.type, area: l.area, title: l.title, code: { file: (l.code.file || '').toString(), text: l.code.text },
+      predict: l.predict, explain: l.explain, exercise: cleanExercise(l.exercise),
+      related: Array.isArray(l.related) ? l.related.filter(str) : [], appearances: [], example: l.example === true,
+    }));
     added++;
   }
-  save(data);
-  console.log(`saved ${added} new lesson(s), ${repeated} repeated concept(s) recorded as appearances. Project: ${proj.slug}. Total lessons: ${data.lessons.length}`);
+  S.writeState(state);
+  console.log(`saved ${added} new lesson(s), ${repeated} repeated concept(s) recorded as appearances. Project: ${proj.slug}. Notes: ${dir.replace(/\\/g, '/')}`);
 }
 
 function list() {
-  const data = load();
-  if (data.lessons.length === 0) return console.log('no lessons yet');
-  for (const l of data.lessons) console.log(`${l.concept}\t${l.type}\t${l.area}\t${l.project}\t${l.commit.hash}\t${l.title}`);
+  const all = allLessons();
+  if (all.length === 0) return console.log('no lessons yet');
+  for (const l of all) console.log(`${l.id}\t${l.type}\t${l.area}\t${l.project}\t${l.commit.hash}\t${l.title}`);
+}
+
+function repo() {
+  const action = argv[1];
+  const proj = S.identify(project);
+  const state = S.readState();
+  const now = new Date().toISOString();
+  if (action === 'enable' || action === 'disable') {
+    const known = state.projects[proj.slug] || {};
+    state.projects[proj.slug] = { ...known, name: proj.name, path: proj.dir, remote: proj.remote, firstSeen: known.firstSeen || now, lastSeen: now, learn: action === 'enable' };
+    S.writeState(state);
+  } else if (action !== 'status') fail('usage: repo status|enable|disable [--project dir]');
+  const entry = state.projects[proj.slug];
+  console.log(JSON.stringify({ project: proj.slug, name: proj.name, learn: entry && typeof entry.learn === 'boolean' ? entry.learn : null }));
 }
 
 function status() {
-  const data = load();
-  const cfg = readJson(configFile, {});
-  const pluginJson = readJson(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), {});
-  const pending = data.lessons.filter((l) => !l.synced).length + data.appearances.filter((a) => !a.synced).length;
+  const all = allLessons({ warn: false });
+  const state = S.readState();
+  const cfg = S.readConfig();
+  const pluginJson = S.readJson(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), {});
+  const pending = all.filter((l) => !state.sync[l.id] || state.sync[l.id].hash !== l.hash).length;
+  const p = S.readProfile();
   console.log(JSON.stringify({
-    home: home.replace(/\\/g, '/'),
-    lessons: data.lessons.length,
-    projects: Object.keys(data.projects).length,
+    home: S.home().replace(/\\/g, '/'),
+    notesDir: S.notesDir().replace(/\\/g, '/'),
+    lessons: all.length,
+    projects: Object.keys(state.projects).length,
     pendingSync: pending,
-    profile: (({ isDefault, modalities, level }) => ({ isDefault, modalities, level }))(readProfile()),
+    profile: { isDefault: p.isDefault, modalities: p.modalities, level: p.level },
     artifactUrl: cfg.artifactUrl || null,
     siteVersion: cfg.siteVersion || null,
     pluginVersion: pluginJson.version || null,
@@ -175,15 +178,14 @@ function status() {
 
 function profile() {
   const action = argv[1];
-  const file = path.join(home, 'profile.json');
-  if (action === 'get') return console.log(JSON.stringify(readProfile(), null, 2));
+  const file = path.join(S.home(), 'profile.json');
+  if (action === 'get') return console.log(JSON.stringify(S.readProfile(), null, 2));
   if (action !== 'set') fail('usage: profile get | profile set (JSON on stdin)');
   return readStdin().then((raw) => {
     let input;
     try { input = JSON.parse(raw); } catch { fail('stdin is not valid JSON'); }
     if (input && input.data && typeof input.data === 'object') input = input.data;
-    const current = readJson(file, {});
-    const next = { ...current };
+    const next = { ...S.readJson(file, {}) };
     if (input.modalities !== undefined) {
       const bad = (Array.isArray(input.modalities) ? input.modalities : []).filter((m) => !MODALITIES[m]);
       if (!Array.isArray(input.modalities) || input.modalities.length === 0 || bad.length) fail(`modalities must be a non-empty list of: ${Object.keys(MODALITIES).join(', ')}${bad.length ? `. Unknown: ${bad.join(', ')}` : ''}`);
@@ -193,64 +195,54 @@ function profile() {
     for (const k of ['level', 'language']) if (typeof input[k] === 'string') next[k] = input[k];
     if (input.emphasis && typeof input.emphasis === 'object') next.emphasis = input.emphasis;
     next.updatedAt = new Date().toISOString();
-    writeJson(file, next);
-    console.log(`profile saved. Modalities: ${(next.modalities || readProfile().modalities).join(', ')}`);
+    S.writeJson(file, next);
+    console.log(`profile saved. Modalities: ${(next.modalities || S.readProfile().modalities).join(', ')}`);
   });
 }
 
 function config() {
   const [, action, key, value] = argv;
-  const cfg = readJson(configFile, {});
-  if (action === 'set' && key && value !== undefined) { cfg[key] = value; writeJson(configFile, cfg); console.log(`${key} saved`); }
+  const cfg = S.readConfig();
+  if (action === 'set' && key && value !== undefined) { cfg[key] = value; S.writeJson(S.configFile(), cfg); console.log(`${key} saved`); }
   else if (action === 'get') console.log(JSON.stringify(cfg, null, 2));
   else fail('usage: config get | config set <key> <value>');
 }
 
 function syncPlan() {
-  const data = load();
-  const docs = [];
-  for (const l of data.lessons.filter((x) => !x.synced)) {
-    const { synced, ...body } = l;
-    docs.push({ kind: 'lesson', id: l.id, collection: 'lessons', body });
-  }
-  for (const a of data.appearances.filter((x) => !x.synced)) {
-    const { synced, ...body } = a;
-    docs.push({ kind: 'appearance', id: a.id, collection: 'appearances', body });
-  }
-  fs.rmSync(outbox, { recursive: true, force: true });
-  const take = docs.slice(0, BATCH);
-  const writes = take.map((d) => {
-    const file = path.join(outbox, `${d.kind}-${d.id}.json`);
-    writeJson(file, d.body);
-    return { op: 'set', collection: d.collection, doc_id: d.id, file_path: file.replace(/\\/g, '/') };
+  const state = S.readState();
+  const todo = allLessons().filter((l) => !state.sync[l.id] || state.sync[l.id].hash !== l.hash);
+  fs.rmSync(outbox(), { recursive: true, force: true });
+  const take = todo.slice(0, BATCH);
+  const writes = take.map((l) => {
+    const { file, hash, ...doc } = l;
+    const out = path.join(outbox(), `${l.id}.json`);
+    S.writeJson(out, doc);
+    const w = { op: 'set', collection: 'lessons', doc_id: l.id, file_path: out.replace(/\\/g, '/') };
+    if (state.sync[l.id] && state.sync[l.id].version) w.if_version = state.sync[l.id].version;
+    return w;
   });
-  writeJson(path.join(outbox, 'plan.json'), { ids: take.map((d) => ({ kind: d.kind, id: d.id })) });
-  console.log(JSON.stringify({ count: take.length, remaining: docs.length - take.length, writes }));
+  S.writeJson(path.join(outbox(), 'plan.json'), { items: take.map((l) => ({ id: l.id, hash: l.hash })) });
+  console.log(JSON.stringify({ count: take.length, remaining: todo.length - take.length, writes }));
 }
 
 function markSynced() {
-  const plan = readJson(path.join(outbox, 'plan.json'), null);
+  const plan = S.readJson(path.join(outbox(), 'plan.json'), null);
   if (!plan) fail('no sync plan found, run sync-plan first');
-  const data = load();
-  for (const { kind, id } of plan.ids) {
-    const list = kind === 'lesson' ? data.lessons : data.appearances;
-    const item = list.find((x) => x.id === id);
-    if (item) item.synced = true;
-  }
-  save(data);
-  fs.rmSync(outbox, { recursive: true, force: true });
-  console.log(`marked ${plan.ids.length} item(s) as synced`);
+  const state = S.readState();
+  for (const { id, hash } of plan.items) state.sync[id] = { hash, version: ((state.sync[id] && state.sync[id].version) || 0) + 1 };
+  S.writeState(state);
+  fs.rmSync(outbox(), { recursive: true, force: true });
+  console.log(`marked ${plan.items.length} lesson(s) as synced`);
 }
 
 function history() {
-  const repo = path.resolve(argv[1] && !argv[1].startsWith('--') ? argv[1] : project);
+  const repoPath = path.resolve(argv[1] && !argv[1].startsWith('--') ? argv[1] : project);
   const limit = Number(flag('limit')) || 10;
-  const proj = identify(repo);
-  const data = load();
-  const done = new Set(data.lessons.filter((l) => l.project === proj.slug).map((l) => l.commit.hash));
+  const proj = S.identify(repoPath);
+  const done = new Set(allLessons({ warn: false }).filter((l) => l.project === proj.slug).map((l) => l.commit.hash));
   let out;
-  try { out = git(repo, ['log', '--no-merges', '--numstat', '--format=@@%h|%ad|%s', '--date=short', '-n', '400']); }
-  catch { fail(`${repo} is not a git repository or has no commits`); }
+  try { out = S.git(repoPath, ['log', '--no-merges', '--numstat', '--format=@@%h|%ad|%s', '--date=short', '-n', '400']); }
+  catch { fail(`${repoPath} is not a git repository or has no commits`); }
   const commits = [];
   let cur = null;
   for (const line of out.split('\n')) {
@@ -275,10 +267,10 @@ function history() {
     .filter((c) => c.score >= 2)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
-  console.log(JSON.stringify({ project: proj.slug, projectName: proj.name, repo: repo.replace(/\\/g, '/'), scanned: commits.length, alreadyLearned: done.size, candidates: ranked.map((c) => ({ hash: c.hash, date: c.date, subject: c.subject, files: c.files.length, lines: c.lines })) }, null, 2));
+  console.log(JSON.stringify({ project: proj.slug, projectName: proj.name, repo: repoPath.replace(/\\/g, '/'), scanned: commits.length, alreadyLearned: done.size, candidates: ranked.map((c) => ({ hash: c.hash, date: c.date, subject: c.subject, files: c.files.length, lines: c.lines })) }, null, 2));
 }
 
 const cmd = argv[0];
-const commands = { add, list, status, config, profile, 'sync-plan': syncPlan, 'mark-synced': markSynced, history };
+const commands = { add, list, status, repo, config, profile, 'sync-plan': syncPlan, 'mark-synced': markSynced, history };
 if (commands[cmd]) commands[cmd]();
 else fail(`usage: lbd.js ${Object.keys(commands).join('|')}`);
