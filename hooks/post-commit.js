@@ -4,7 +4,7 @@ const path = require('path');
 const shared = require(path.join(__dirname, '..', 'scripts', 'shared.js'));
 
 const COMMIT_CMD = /\bgit\s+(?:-C\s+\S+\s+|-c\s+\S+\s+)*commit\b/;
-const COMMIT_OUT = /\[[^\]\n]+\s[0-9a-f]{7,}\]/;
+const FRESH_SECONDS = 300;
 const AREAS = [
   ['tests', /(^|\/)(tests?|__tests__|spec|e2e)\/|\.(test|spec)\.[a-z]+$/i],
   ['base-de-datos', /(^|\/)(migrations?|prisma|db|database|schema)\/|\.sql$/i],
@@ -30,7 +30,7 @@ function askMessage(proj, cwd, hash, message, lbd) {
     'Do not write any lessons yet. Ask the user once, in their language, with the AskUserQuestion tool:',
     `"¿Quieres que Learn by Doing aprenda de los commits de ${proj.name}?" with two options: "Sí, en este repo" and "No, nunca aquí".`,
     'Tell them in one sentence that lessons are generated from the code of each commit and, when they run /study, snippets are uploaded to their own private study space. If this repo belongs to an employer or client, they should check that this is allowed.',
-    `Then run: node "${lbd}" repo enable --project "${fwd(cwd)}"   (or "repo disable" for the second option).`,
+    `Then call the set_repo tool of the learn-by-doing MCP server with project "${fwd(cwd)}" and enabled true for the first option, false for the second.`,
     `If they said yes, read this commit with: git -C "${fwd(cwd)}" show ${hash}   and continue as the learn-by-doing skill describes, saving the lessons now. If they said no, say nothing more about it.`,
   ].join('\n');
 }
@@ -41,22 +41,30 @@ function main(raw) {
   if (input.tool_name !== 'Bash') return;
   const command = (input.tool_input && input.tool_input.command) || '';
   if (!COMMIT_CMD.test(command)) return;
-  const response = typeof input.tool_response === 'string' ? input.tool_response : JSON.stringify(input.tool_response || '');
-  if (!COMMIT_OUT.test(response)) return;
 
   const cwd = input.cwd || process.cwd();
   if (fs.existsSync(path.join(shared.home(), 'off')) || fs.existsSync(path.join(cwd, '.learn-off'))) return;
 
   const lbd = fwd(path.join(__dirname, '..', 'scripts', 'lbd.js'));
   const proj = shared.identify(cwd);
-  const entry = shared.readState().projects[proj.slug];
+  const state = shared.readState();
+  const entry = state.projects[proj.slug];
   if (entry && entry.learn === false) return;
 
-  let hash, message;
+  /* The command's output is not a reliable sign of a commit (git commit -q prints nothing),
+     so ask git: HEAD must be recent and not the one already handled. */
+  let full, hash, message, committedAt;
   try {
+    full = shared.git(cwd, ['rev-parse', 'HEAD']).trim();
     hash = shared.git(cwd, ['rev-parse', '--short', 'HEAD']).trim();
     message = shared.git(cwd, ['log', '-1', '--format=%s']).trim();
+    committedAt = Number(shared.git(cwd, ['log', '-1', '--format=%ct']).trim());
   } catch { return; }
+  if (!committedAt || Date.now() / 1000 - committedAt > FRESH_SECONDS) return;
+  if (entry && entry.lastHash === full) return;
+  state.projects[proj.slug] = { ...(entry || {}), name: proj.name, path: proj.dir, remote: proj.remote, firstSeen: (entry && entry.firstSeen) || new Date().toISOString(), lastSeen: new Date().toISOString(), lastHash: full };
+  shared.writeState(state);
+
   if (!entry || entry.learn !== true) return out(askMessage(proj, cwd, hash, message, lbd));
 
   let numstat, patch;
@@ -106,8 +114,8 @@ function main(raw) {
     'Changed areas:',
     areaList,
     '',
-    'Follow the learn-by-doing skill now, silently, without interrupting the user: pick the lessons worth teaching from this commit and save them with:',
-    `  node "${lbd}" add --project "${fwd(cwd)}"   (lesson JSON on stdin)`,
+    'Follow the learn-by-doing skill now, silently, without interrupting the user: pick the lessons worth teaching from this commit and save them with the save_lessons tool of the learn-by-doing MCP server, using:',
+    `  project: "${fwd(cwd)}"   commit: { "hash": "${hash}", "message": ${JSON.stringify(message)} }`,
     'Then add one short line at the end of your reply, like "N lessons saved from this commit, open them with /study". Do not explain the lessons in chat.',
     '',
     '--- patch ---',

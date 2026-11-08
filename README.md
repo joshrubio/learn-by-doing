@@ -137,7 +137,8 @@ git commit by Claude, in any repo
         off       -> silent, no tokens
         undecided -> short message asking Claude to ask you once, no patch
         on        -> commit message, areas, patch and your profile
-   -> the learn-by-doing skill writes lessons, saved as notes by lbd.js
+   -> the learn-by-doing skill writes lessons and saves them as notes through the plugin's
+      MCP tool save_lessons (no shell commands, no temp files)
 /study
    -> pulls your profile from the study space into ~/.learn-by-doing/profile.json
    -> lbd.js sync-plan (new and edited notes, by content hash) -> one batched write
@@ -163,8 +164,10 @@ To pause the plugin everywhere, create an empty file `~/.learn-by-doing/off`, or
 ## Known limits
 
 - Only commits Claude makes inside a Claude Code session are noticed. Commits you make by hand are not.
-- The hook was tested with simulated input. If Claude Code changes the shape of the tool result, the commit detection may need an update. Please open an issue.
-- The hook starts a small Node process on every Bash call. Claude Code can filter hooks by command with an `if` field, but this plugin does not use it yet, because it is unverified for compound commands such as `git add -A && git commit`, and a wrong filter would silently miss commits.
+- Tested end to end with Claude Code 2.1.319 in headless mode (`claude -p`): the hook, the activation question, saving notes. Nobody has used it interactively yet, so permission prompts and the question dialog are untested.
+- The hook only runs for Bash calls that involve git (it uses the hook `if` filter `Bash(git *)`). This was verified for `git add -A && git commit`, `cd . && git commit` and `git -C . commit`. A commit made through some unusual wrapper might be missed.
+- Commits are detected by asking git for a recent, not yet handled `HEAD`, not by reading the command output, so `git commit -q` works.
+- The first time Claude uses the plugin's tools in a session, Claude Code asks for permission. Choose "always allow" for the `learn-by-doing` server so later commits do not ask again.
 - A profile change reaches the lessons Claude writes after your next `/study`, because the plugin reads the profile then.
 - Lesson quality depends on Claude following the skill. The script validates the shape of each lesson, not its content.
 - Creating the Artifact the first time and each sync ask for your approval in Claude Code.
