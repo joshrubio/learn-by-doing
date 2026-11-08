@@ -39,6 +39,8 @@ function validate(l, i) {
   if (!AREAS.includes(l.area)) errs.push(`area must be one of ${AREAS.join(', ')}`);
   if (!str(l.concept) || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(l.concept)) errs.push('concept must be a kebab-case slug');
   for (const k of ['title', 'predict', 'explain', 'challenge']) if (!str(l[k])) errs.push(`${k} is required`);
+  const x = l.context;
+  if (!x || !str(x.building) || !str(x.snippetRole) || !str(x.learning)) errs.push('context.building, context.snippetRole and context.learning are required');
   if (!l.code || !str(l.code.text)) errs.push('code.text is required');
   else if (l.code.text.split('\n').length > 20) errs.push('code.text is longer than 20 lines, keep only the lines that matter');
   const c = l.check;
@@ -72,7 +74,9 @@ async function add() {
     data.lessons.push({
       id: `${l.concept}-${data.lessons.length + 1}`,
       createdAt: now,
+      project: path.basename(project),
       commit: { hash: commit.hash || '', message: commit.message || '' },
+      context: { building: l.context.building, snippetRole: l.context.snippetRole, learning: l.context.learning },
       type: l.type, area: l.area, concept: l.concept, title: l.title,
       code: { file: (l.code.file || '').toString(), text: l.code.text },
       predict: l.predict, explain: l.explain, challenge: l.challenge,

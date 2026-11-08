@@ -47,7 +47,12 @@ If the hook says LARGE, do not summarize the whole commit. Split by area, take t
 
 ## Lesson structure
 
-Practice first, theory after:
+Context first, then practice, then theory. A reader who opens a lesson cold must know where they are before seeing any code:
+0. `context`, three short plain-language sentences, written for someone who has not looked at the commit:
+   - `building`: what the commit or feature was building, in product terms ("a login endpoint so users can sign in with email and password"), never a restatement of the diff.
+   - `snippetRole`: what this snippet does inside that, in one sentence ("this is the route that receives the login form").
+   - `learning`: the one concept this lesson teaches, as a promise to the reader ("you will see why a route should not talk to the database directly").
+   The project name is added automatically. The `title` must name the concept, not the file.
 1. `code`: the user's real code, at most 15 lines, only the lines that illustrate the concept. Never paste the whole diff.
 2. `predict`: one short question to think about before reading the explanation.
 3. `explain`: the concept in 3 or 4 lines, as a mental model and not a textbook definition.
@@ -69,6 +74,11 @@ node "<plugin>/scripts/lbd.js" add --project "<dir>" <<'EOF'
       "area": "backend",
       "concept": "separation-of-concerns",
       "title": "Why the route does not talk to the database directly",
+      "context": {
+        "building": "A login endpoint so users can sign in with email and password.",
+        "snippetRole": "This is the route that receives the login request and answers with the user or an error.",
+        "learning": "Why a route should hand work to a service instead of querying the database itself."
+      },
       "code": { "file": "src/routes/login.js", "text": "..." },
       "predict": "What would break if the route queried the database itself?",
       "explain": "...",

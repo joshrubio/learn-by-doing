@@ -33,6 +33,7 @@ textarea{width:100%;min-height:64px;background:var(--bg);color:var(--ink);border
 .opt.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
 .opt.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)}
 .label{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:14px 0 4px}
+.learn{font-weight:600}
 .why{border-left:3px solid var(--accent);padding:2px 12px;margin-top:8px;color:var(--ink)}
 .empty{color:var(--muted);text-align:center;padding:40px 0}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:20px}
@@ -124,6 +125,16 @@ function quiz(l, onDone) {
   return box;
 }
 
+function context(l) {
+  const x = l.context;
+  const head = h('div', { class: 'meta' }, h('span', { class: 'tag' }, l.project || DATA.project), h('span', { class: 'tag' }, l.commit.hash || 'sin commit'));
+  if (!x) return head;
+  return h('div', {}, head,
+    h('div', { class: 'label' }, 'Qué se estaba construyendo'), h('div', {}, x.building),
+    h('div', { class: 'label' }, 'Qué vas a aprender'), h('div', { class: 'learn' }, x.learning));
+}
+function snippetRole(l) { return l.context ? h('div', { class: 'file' }, l.context.snippetRole) : null; }
+
 function newCard(l) {
   const reveal = h('div', { class: 'hidden' });
   const guess = h('textarea', { placeholder: 'Escribe tu predicción antes de ver la explicación' });
@@ -134,7 +145,8 @@ function newCard(l) {
     h('div', { class: 'label' }, 'Comprobación'), quiz(l, render),
   );
   if (l.related.length) reveal.append(h('div', { class: 'label' }, 'Relacionado'), h('div', { class: 'meta' }, l.related.map((r) => h('span', { class: 'tag' }, r))));
-  return h('div', { class: 'card' }, meta(l), h('h3', {}, l.title), codeBlock(l),
+  return h('div', { class: 'card' }, meta(l), h('h3', {}, l.title), context(l),
+    h('div', { class: 'label' }, 'El código'), snippetRole(l), codeBlock(l),
     h('div', { class: 'label' }, 'Antes de leer, predice'), h('div', {}, l.predict), guess, btn, reveal);
 }
 
@@ -157,7 +169,7 @@ function viewRepaso() {
   const root = h('div');
   root.append(chips());
   if (!list.length) return root.append(h('div', { class: 'empty' }, 'Nada que repasar por ahora. Los conceptos aparecen aquí cuando toca recordarlos.')) || root;
-  list.forEach((l) => root.append(h('div', { class: 'card' }, meta(l), h('h3', {}, l.title), codeBlock(l), quiz(l, render))));
+  list.forEach((l) => root.append(h('div', { class: 'card' }, meta(l), h('h3', {}, l.title), context(l), snippetRole(l), codeBlock(l), quiz(l, render))));
   return root;
 }
 

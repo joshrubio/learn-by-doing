@@ -18,7 +18,7 @@ Lessons teach the why, not the syntax. Types: `concepto`, `decision` (architectu
 ## Install
 
 ```
-/plugin marketplace add <owner>/learn-by-doing
+/plugin marketplace add joshrubio/learn-by-doing
 /plugin install learn-by-doing@learn-by-doing
 ```
 
