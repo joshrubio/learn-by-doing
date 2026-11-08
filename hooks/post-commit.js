@@ -75,8 +75,21 @@ function main(raw) {
   const patchText = truncated ? patch.slice(0, MAX_PATCH) + '\n... [patch truncated, use git show for the rest]' : patch;
   const lbd = path.join(__dirname, '..', 'scripts', 'lbd.js').replace(/\\/g, '/');
 
+  let profileLines = [];
+  try {
+    const { readProfile } = require(path.join(__dirname, '..', 'scripts', 'shared.js'));
+    const p = readProfile();
+    profileLines = [
+      `Learner profile${p.isDefault ? ' (no profile set yet, defaults)' : ''}: allowed exercise modalities = ${p.modalities.join(', ')}.`,
+      p.level ? `Level: ${p.level}.` : '',
+      p.known.length ? `Known concepts, skip them: ${p.known.join(', ')}.` : '',
+      p.rusty.length ? `Rusty concepts, teach as a short refresher: ${p.rusty.join(', ')}.` : '',
+    ].filter(Boolean);
+  } catch {}
+
   const context = [
     `[learn-by-doing] A commit was just made: ${hash} "${message}".`,
+    ...profileLines,
     `Size: ${useful.length} file(s), ${lines} line(s) changed${large ? ' -> LARGE commit, apply the large-commit rule' : ''}.`,
     'Changed areas:',
     areaList,

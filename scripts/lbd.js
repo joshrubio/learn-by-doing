@@ -4,6 +4,8 @@ const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
+const { MODALITIES, readProfile } = require('./shared');
+
 const TYPES = ['concepto', 'decision', 'riesgo', 'lectura'];
 const AREAS = ['frontend', 'backend', 'base-de-datos', 'tests', 'config', 'codigo', 'docs', 'otros'];
 const MAX_PER_COMMIT = 4;
@@ -61,16 +63,42 @@ function validate(l, i) {
   if (!TYPES.includes(l.type)) errs.push(`type must be one of ${TYPES.join(', ')}`);
   if (!AREAS.includes(l.area)) errs.push(`area must be one of ${AREAS.join(', ')}`);
   if (!str(l.concept) || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(l.concept)) errs.push('concept must be a kebab-case slug');
-  for (const k of ['title', 'predict', 'explain', 'challenge']) if (!str(l[k])) errs.push(`${k} is required`);
+  for (const k of ['title', 'predict', 'explain']) if (!str(l[k])) errs.push(`${k} is required`);
   const x = l.context;
   if (!x || !str(x.building) || !str(x.snippetRole) || !str(x.learning)) errs.push('context.building, context.snippetRole and context.learning are required');
   if (!l.code || !str(l.code.text)) errs.push('code.text is required');
   else if (l.code.text.split('\n').length > 20) errs.push('code.text is longer than 20 lines, keep only the lines that matter');
-  const c = l.check;
-  if (!c || !str(c.question) || !str(c.why)) errs.push('check.question and check.why are required');
-  else if (!Array.isArray(c.options) || c.options.length < 2 || c.options.length > 5 || !c.options.every(str)) errs.push('check.options must be 2 to 5 non-empty strings');
-  else if (!Number.isInteger(c.answer) || c.answer < 0 || c.answer >= c.options.length) errs.push('check.answer must be a valid option index');
+  errs.push(...validateExercise(l.exercise));
   return errs.length ? `lesson ${i + 1}: ${errs.join('; ')}` : null;
+}
+
+function validateExercise(e) {
+  if (!e || typeof e !== 'object') return ['exercise is required'];
+  const meta = MODALITIES[e.modality];
+  if (!meta) return [`exercise.modality must be one of ${Object.keys(MODALITIES).join(', ')}`];
+  const profile = readProfile();
+  if (!profile.modalities.includes(e.modality)) return [`exercise.modality "${e.modality}" is not enabled for this user. Enabled: ${profile.modalities.join(', ')}`];
+  const errs = [];
+  if (!str(e.prompt)) errs.push('exercise.prompt is required');
+  if (e.code !== undefined && !(e.code && str(e.code.text) && e.code.text.split('\n').length <= 20)) errs.push('exercise.code.text must be 1 to 20 lines when present');
+  if (['predice-salida', 'encuentra-error', 'revisa-cambio', 'compara'].includes(e.modality) && !(e.code && str(e.code.text))) errs.push(`exercise.code is required for ${e.modality}`);
+  if (meta.kind === 'choice') {
+    if (!Array.isArray(e.options) || e.options.length < 2 || e.options.length > 5 || !e.options.every(str)) errs.push('exercise.options must be 2 to 5 non-empty strings');
+    else if (!Number.isInteger(e.answer) || e.answer < 0 || e.answer >= e.options.length) errs.push('exercise.answer must be a valid option index');
+    if (!str(e.why)) errs.push('exercise.why is required');
+  } else {
+    if (!Array.isArray(e.keyPoints) || e.keyPoints.length < 2 || e.keyPoints.length > 5 || !e.keyPoints.every(str)) errs.push('exercise.keyPoints must be 2 to 5 non-empty strings');
+    if (!str(e.modelAnswer)) errs.push('exercise.modelAnswer is required');
+  }
+  return errs;
+}
+
+function cleanExercise(e) {
+  const out = { modality: e.modality, prompt: e.prompt };
+  if (e.code) out.code = { file: (e.code.file || '').toString(), text: e.code.text };
+  if (MODALITIES[e.modality].kind === 'choice') Object.assign(out, { options: e.options, answer: e.answer, why: e.why });
+  else Object.assign(out, { keyPoints: e.keyPoints, modelAnswer: e.modelAnswer });
+  return out;
 }
 
 async function add() {
@@ -109,8 +137,8 @@ async function add() {
       context: { building: l.context.building, snippetRole: l.context.snippetRole, learning: l.context.learning },
       type: l.type, area: l.area, concept: l.concept, title: l.title,
       code: { file: (l.code.file || '').toString(), text: l.code.text },
-      predict: l.predict, explain: l.explain, challenge: l.challenge,
-      check: { question: l.check.question, options: l.check.options, answer: l.check.answer, why: l.check.why },
+      predict: l.predict, explain: l.explain,
+      exercise: cleanExercise(l.exercise),
       related: Array.isArray(l.related) ? l.related.filter(str) : [],
       example: l.example === true,
       synced: false,
@@ -137,11 +165,37 @@ function status() {
     lessons: data.lessons.length,
     projects: Object.keys(data.projects).length,
     pendingSync: pending,
+    profile: (({ isDefault, modalities, level }) => ({ isDefault, modalities, level }))(readProfile()),
     artifactUrl: cfg.artifactUrl || null,
     siteVersion: cfg.siteVersion || null,
     pluginVersion: pluginJson.version || null,
     sitePath: path.join(__dirname, '..', 'site', 'index.html').replace(/\\/g, '/'),
   }, null, 2));
+}
+
+function profile() {
+  const action = argv[1];
+  const file = path.join(home, 'profile.json');
+  if (action === 'get') return console.log(JSON.stringify(readProfile(), null, 2));
+  if (action !== 'set') fail('usage: profile get | profile set (JSON on stdin)');
+  return readStdin().then((raw) => {
+    let input;
+    try { input = JSON.parse(raw); } catch { fail('stdin is not valid JSON'); }
+    if (input && input.data && typeof input.data === 'object') input = input.data;
+    const current = readJson(file, {});
+    const next = { ...current };
+    if (input.modalities !== undefined) {
+      const bad = (Array.isArray(input.modalities) ? input.modalities : []).filter((m) => !MODALITIES[m]);
+      if (!Array.isArray(input.modalities) || input.modalities.length === 0 || bad.length) fail(`modalities must be a non-empty list of: ${Object.keys(MODALITIES).join(', ')}${bad.length ? `. Unknown: ${bad.join(', ')}` : ''}`);
+      next.modalities = input.modalities;
+    }
+    for (const k of ['known', 'rusty']) if (Array.isArray(input[k])) next[k] = input[k].filter((s) => typeof s === 'string' && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(s));
+    for (const k of ['level', 'language']) if (typeof input[k] === 'string') next[k] = input[k];
+    if (input.emphasis && typeof input.emphasis === 'object') next.emphasis = input.emphasis;
+    next.updatedAt = new Date().toISOString();
+    writeJson(file, next);
+    console.log(`profile saved. Modalities: ${(next.modalities || readProfile().modalities).join(', ')}`);
+  });
 }
 
 function config() {
@@ -225,6 +279,6 @@ function history() {
 }
 
 const cmd = argv[0];
-const commands = { add, list, status, config, 'sync-plan': syncPlan, 'mark-synced': markSynced, history };
+const commands = { add, list, status, config, profile, 'sync-plan': syncPlan, 'mark-synced': markSynced, history };
 if (commands[cmd]) commands[cmd]();
 else fail(`usage: lbd.js ${Object.keys(commands).join('|')}`);
