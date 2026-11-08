@@ -64,6 +64,10 @@ Every lesson needs a `scope`, which says where the concept lives:
 
 Do not write languages, frameworks or the project kind yourself. The tool derives them from the package the lesson's `code.file` belongs to, so names never drift. If you do set `languages` or `frameworks`, they must come from the lists in the hook message. In a monorepo, choose `code.file` from the package the lesson is about.
 
+### Concept names and the map
+
+The study space draws a map of what the learner has discovered, what is next to it and what is unexplored. It is built on a catalog of concepts with prerequisites. The hook message lists the catalog ids that fit the repo. When the idea of a lesson matches one of them, use that id as `concept` (for example `separacion-de-responsabilidades`, `js-promesas-y-async-await`, `next-rutas`), so the lesson lands on the right node. If nothing matches, write a new descriptive kebab-case slug; it shows up as an extra node in the closest branch. Never reuse a catalog id for a different idea.
+
 ## Every lesson has the same spine
 
 Context, predict, concept, one exercise, result. The only part that varies is the exercise, and there is exactly one per lesson.

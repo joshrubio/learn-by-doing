@@ -109,6 +109,19 @@ What you need to learn depends on what you are building. A classic app needs the
 
 In the study space you can filter lessons by project, kind and language, and the concepts table shows each one's scope.
 
+## The map
+
+Lessons answer "what did I learn in this commit". The map answers "where am I, and what is next". It is built on a catalog of 85 concepts in 15 branches (universal, three languages, four frameworks and seven kinds of project) with the prerequisites between them.
+
+- **Discovered**: a lesson of yours covers it.
+- **You know it**: you marked it in the diagnostic. A topic you marked as rusty counts as known and is flagged.
+- **Frontier**: you have everything it needs and it belongs to one of your branches. This is what to learn next, and the dashboard suggests it when nothing else is pending.
+- **Unexplored**: the rest. Branches your repos do not touch stay in the fog, but you can open any of them from "Explorar otra rama".
+
+Pick a concept to see what it is, what you need before it, what it opens the way to and your lessons about it. "Explorar con Claude" explains any concept on demand, even an unexplored one. That uses your own Claude usage and is never run on its own.
+
+Lessons attach to the map by their concept name. The hook tells Claude which catalog ids fit your repo, and English aliases are understood (`separation-of-concerns` lands on `separacion-de-responsabilidades`). A concept outside the catalog still appears, as an extra node in the closest branch. The catalog lives in `scripts/catalog.js`; after editing it run `node scripts/sync-catalog.js` to copy it into the page.
+
 ## Every lesson has the same shape
 
 Context, predict, concept, one exercise, result.
@@ -141,6 +154,7 @@ Open exercises are graded against key points by Claude, using the Artifact's ask
 - **Lecciones**: filter by project, area and state, grouped by commit.
 - **Repaso**: spaced review with intervals of 1, 3, 7, 16 and 35 days. A concept you got wrong goes back to the start; a partly right one stays where it is.
 - **Conceptos**: everything you have seen, with its state and in how many projects it appeared. A concept has one state, shared by all your projects.
+- **Mapa**: a map of what you have discovered, what is next to it and what is unexplored (see below).
 - **Perfil**: your exercise choices, with the button to change them.
 
 States: new, learning, rusty (due for review), mastered.
@@ -188,12 +202,13 @@ To pause the plugin everywhere, create an empty file `~/.learn-by-doing/off`, or
 - Lesson quality depends on Claude following the skill. The script validates the shape of each lesson, not its content.
 - Creating the Artifact the first time and each sync ask for your approval in Claude Code.
 - Detection relies on manifests and extensions and knows about 35 common frameworks. An unusual layout may come out as `otro` or miss a framework. Correct the kind in the activation question.
+- The catalog covers common concepts only. A language or framework that is not in it has no branch yet, so its lessons show up as extra nodes in the universal branch.
 - If two concepts mean the same thing under different names, they are kept apart. The skill is told to reuse existing names, which prevents most of it.
 - If you edit a note so that it no longer follows the format, the script skips it with a warning instead of syncing it.
 
 ## Ideas for later
 
-- A map to explore your knowledge: discovered concepts, a frontier of what is next to what you know, and unexplored branches, built from the tags above.
+- More catalog branches (Go, Rust, Vue, Django, Spring...) and prerequisites you can edit from the study space.
 - Export your progress and profile into the notes too.
 - Semantic search across notes once a collection is large enough to need it.
 

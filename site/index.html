@@ -138,6 +138,36 @@ legend{font:600 1rem var(--font-display);padding:0 6px}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
 .reco{border:1px solid var(--accent);border-radius:10px;padding:14px 16px;background:var(--surface);margin:14px 0}
 .reco ul{margin:6px 0 0;padding-left:18px}
+.mapbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.mapbar select{font:inherit;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 10px;min-height:36px}
+.mapsum{color:var(--muted);font-size:.9rem;margin:0 0 10px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin:0 0 12px;font-size:.82rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:16px;height:12px;border-radius:3px;border:1.5px solid var(--line)}
+.legend i.descubierto{background:color-mix(in srgb,var(--accent) 14%,var(--surface));border-color:var(--accent)}
+.legend i.frontera{border-style:dashed;border-color:var(--accent)}
+.legend i.conocido{border-color:var(--ok)}
+.legend i.sin-explorar{border-style:dotted;background:var(--code)}
+.mapwrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:16px;margin-bottom:14px}
+.mapcanvas{position:relative}
+.mapcanvas svg{position:absolute;left:0;top:0;pointer-events:none}
+.edge{fill:none;stroke:var(--line);stroke-width:1.5}
+.edge.on{stroke:var(--accent)}
+.node{position:absolute;display:flex;flex-direction:column;justify-content:center;gap:3px;text-align:left;padding:6px 10px;border-radius:8px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font:500 .8rem/1.25 var(--font-body);cursor:pointer;overflow:hidden}
+.node .nt{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.node small{font:500 .64rem var(--font-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.node.descubierto{background:color-mix(in srgb,var(--accent) 14%,var(--surface));border-color:var(--accent)}
+.node.frontera{border-style:dashed;border-color:var(--accent)}
+.node.conocido{border-color:var(--ok)}
+.node.sin-explorar{color:var(--muted);background:var(--code);border-style:dotted}
+.node.oxidado{border-color:var(--warn)}
+.node[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:2px}
+.pill.descubierto{border-color:var(--accent);color:var(--accent)}
+.pill.frontera{border-color:var(--accent);color:var(--accent);border-style:dashed}
+.pill.conocido{border-color:var(--ok);color:var(--ok)}
+.pill.sin-explorar{border-style:dotted}
+.nodelist{display:flex;gap:8px;flex-wrap:wrap}
+.explain{white-space:pre-wrap;background:var(--code);border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:10px;font-size:.92rem}
 footer{margin-top:56px;color:var(--muted);font-size:.85rem}
 @media (max-width:560px){.cta .btn{flex:1 1 100%}.hero{padding-top:36px}}
 @media (prefers-reduced-motion:no-preference){.btn,.chip,.opt{transition:border-color .15s,background .15s}}
@@ -185,7 +215,7 @@ const DIAG=[
   ['arquitectura-en-capas','Arquitectura en capas','arq'],
   ['api-rest','APIs REST','arq'],
   ['bases-de-datos','Bases de datos y modelado','arq'],
-  ['tests','Pruebas automáticas','arq'],
+  ['pruebas-automaticas','Pruebas automáticas','arq'],
   ['seguridad-basica','Seguridad básica (validación, autenticación)','arq']
 ];
 const LEVEL_Q='En un programa con una ruta web, un servicio y una base de datos, ¿por qué se separan esas tres piezas en vez de ponerlo todo junto? Responde con tus palabras.';
@@ -194,7 +224,8 @@ const LEVEL_KEYS=['Cada pieza tiene una responsabilidad','Se puede cambiar una s
 const S={lessons:[],apps:[],progress:{},profile:null,db:null,sample:null,uid:null,loaded:false,progressLoaded:false,slow:false,noDb:false,
   open:null,guess:{},revealed:{},ex:{},toast:'',reviewIds:null,
   filters:{project:'todos',area:'todas',state:'todos',kind:'todos',lang:'todos'},
-  draft:null,diag:{},levelAns:'',levelRes:null,levelBusy:false,reco:null,saved:false,editing:false,skipSetup:false};
+  draft:null,diag:{},levelAns:'',levelRes:null,levelBusy:false,reco:null,saved:false,editing:false,skipSetup:false,
+  mapBranch:'universal',mapNode:null,explain:{}};
 
 function h(tag,attrs,...kids){
   const el=document.createElement(tag);
@@ -440,7 +471,10 @@ function dashboard(){
   if(S.progressLoaded&&!S.profile)next.append(h('p',{},'Aún no has elegido cómo quieres aprender. Con tu perfil, las próximas lecciones llevarán los ejercicios de tu estilo.'),h('a',{class:'btn primary',href:'#perfil'},'Elegir mis ejercicios'));
   else if(due.length)next.append(h('p',{},`${due.length} ${due.length===1?'concepto se ha oxidado':'conceptos se han oxidado'}. Un repaso corto los devuelve a la memoria.`),h('a',{class:'btn primary',href:'#repaso'},'Repasar ahora'));
   else if(fresh.length)next.append(h('p',{},`Empieza por: ${fresh[0].title}`),h('a',{class:'btn primary',href:'#lecciones',onclick:()=>{S.open=fresh[0].id}},'Abrir lección'));
-  else next.append(h('p',{},'Estás al día. Haz otro commit con Claude y vuelve cuando haya lecciones nuevas.'));
+  else{
+    const fr=computeMap().frontier.slice(0,3).map(id=>NODE_BY_ID.get(id).title);
+    next.append(h('p',{},fr.length?'Estás al día. En tu frontera: '+fr.join(', ')+'.':'Estás al día. Haz otro commit con Claude y vuelve cuando haya lecciones nuevas.'),fr.length?h('a',{class:'btn primary',href:'#mapa'},'Ver el mapa'):null);
+  }
   const byProject=h('div',{class:'panel'},h('h3',{},'Por proyecto'));
   Object.entries(projectsOf()).forEach(([slug,p])=>{
     const c={nuevo:0,aprendiendo:0,oxidado:0,dominado:0};p.lessons.forEach(l=>c[stateOf(l)]++);
@@ -656,8 +690,206 @@ function viewPerfil(){
   return root;
 }
 
+/* ---------- map ---------- */
+/*CATALOG:START*/const CATALOG={"branches":[{"id":"universal","label":"Universal","type":"universal","key":""},{"id":"lang:javascript","label":"JavaScript","type":"lenguaje","key":"javascript"},{"id":"lang:typescript","label":"TypeScript","type":"lenguaje","key":"typescript"},{"id":"lang:python","label":"Python","type":"lenguaje","key":"python"},{"id":"fw:react","label":"React","type":"framework","key":"react"},{"id":"fw:nextjs","label":"Next.js","type":"framework","key":"nextjs"},{"id":"fw:express","label":"Express","type":"framework","key":"express"},{"id":"fw:fastapi","label":"FastAPI","type":"framework","key":"fastapi"},{"id":"kind:app","label":"App","type":"tipo","key":"app"},{"id":"kind:libreria","label":"Librería","type":"tipo","key":"libreria"},{"id":"kind:plugin","label":"Plugin","type":"tipo","key":"plugin"},{"id":"kind:mcp","label":"MCP","type":"tipo","key":"mcp"},{"id":"kind:integracion","label":"Integración","type":"tipo","key":"integracion"},{"id":"kind:script","label":"Script","type":"tipo","key":"script"},{"id":"kind:infraestructura","label":"Infraestructura","type":"tipo","key":"infraestructura"}],"nodes":[{"id":"variables-y-tipos","branch":"universal","title":"Variables y tipos de datos","desc":"Dónde se guarda un valor y qué clase de valor es.","requires":[],"aliases":["variables","data-types"]},{"id":"funciones","branch":"universal","title":"Funciones y parámetros","desc":"Bloques reutilizables que reciben datos y devuelven un resultado.","requires":["variables-y-tipos"],"aliases":["functions"]},{"id":"control-de-flujo","branch":"universal","title":"Condicionales y bucles","desc":"Cómo un programa decide y repite.","requires":["variables-y-tipos"],"aliases":["control-flow"]},{"id":"estructuras-de-datos","branch":"universal","title":"Listas, mapas y conjuntos","desc":"Formas de agrupar datos y cuándo usar cada una.","requires":["variables-y-tipos"],"aliases":["data-structures"]},{"id":"manejo-de-errores","branch":"universal","title":"Manejo de errores","desc":"Qué hacer cuando algo falla, sin esconder el fallo.","requires":["funciones"],"aliases":["error-handling"]},{"id":"modularidad","branch":"universal","title":"Módulos y dependencias","desc":"Dividir el código en piezas con límites claros.","requires":["funciones"],"aliases":["modules","modularity"]},{"id":"separacion-de-responsabilidades","branch":"universal","title":"Separación de responsabilidades","desc":"Cada pieza hace una cosa y los cambios quedan contenidos.","requires":["modularidad"],"aliases":["separation-of-concerns"]},{"id":"arquitectura-en-capas","branch":"universal","title":"Arquitectura en capas","desc":"Organizar el código en capas que solo hablan con la de al lado.","requires":["separacion-de-responsabilidades"],"aliases":["layered-architecture","capa-de-acceso-a-datos"]},{"id":"patrones-de-diseno","branch":"universal","title":"Patrones de diseño","desc":"Soluciones probadas a problemas de estructura que se repiten.","requires":["separacion-de-responsabilidades"],"aliases":["design-patterns"]},{"id":"programacion-orientada-a-objetos","branch":"universal","title":"Programación orientada a objetos","desc":"Modelar con objetos que unen datos y comportamiento.","requires":["funciones","estructuras-de-datos"],"aliases":["oop","object-oriented-programming"]},{"id":"programacion-funcional","branch":"universal","title":"Programación funcional","desc":"Componer funciones puras y evitar el estado compartido.","requires":["funciones"],"aliases":["functional-programming"]},{"id":"asincronia","branch":"universal","title":"Asincronía","desc":"Trabajo que termina más tarde sin bloquear al resto.","requires":["funciones"],"aliases":["async","asynchronous-programming"]},{"id":"estado-inmutable","branch":"universal","title":"Estado inmutable","desc":"Crear copias en lugar de modificar el original.","requires":["estructuras-de-datos"],"aliases":["immutability","immutable-state"]},{"id":"validacion-de-entrada","branch":"universal","title":"Validación de entrada","desc":"Comprobar lo que llega de fuera antes de usarlo.","requires":["manejo-de-errores"],"aliases":["input-validation"]},{"id":"autenticacion-y-autorizacion","branch":"universal","title":"Autenticación y autorización","desc":"Quién eres y qué se te permite hacer.","requires":["validacion-de-entrada"],"aliases":["authentication","authorization","auth"]},{"id":"seguridad-basica","branch":"universal","title":"Seguridad básica","desc":"Secretos, inyecciones y datos que no deben filtrarse.","requires":["validacion-de-entrada"],"aliases":["security-basics","auth-error-messages"]},{"id":"pruebas-automaticas","branch":"universal","title":"Pruebas automáticas","desc":"Código que comprueba que tu código sigue funcionando.","requires":["funciones"],"aliases":["testing","tests"]},{"id":"bases-de-datos","branch":"universal","title":"Bases de datos y modelado","desc":"Guardar datos con estructura y consultarlos.","requires":["estructuras-de-datos"],"aliases":["databases","data-modeling"]},{"id":"api-rest","branch":"universal","title":"APIs REST","desc":"Recursos, métodos y códigos de estado sobre HTTP.","requires":["separacion-de-responsabilidades"],"aliases":["rest-api","rest"]},{"id":"limitacion-de-peticiones","branch":"universal","title":"Limitación de peticiones","desc":"Poner un tope a cuántas peticiones acepta un servicio.","requires":["api-rest"],"aliases":["rate-limiting","rate-limiter"]},{"id":"control-de-versiones","branch":"universal","title":"Git y control de versiones","desc":"Historial de cambios, ramas y colaboración.","requires":[],"aliases":["git","version-control"]},{"id":"integracion-continua","branch":"universal","title":"Integración y entrega continuas","desc":"Pruebas y despliegues automáticos en cada cambio.","requires":["pruebas-automaticas","control-de-versiones"],"aliases":["ci-cd","ci"]},{"id":"observabilidad","branch":"universal","title":"Logs y observabilidad","desc":"Ver qué hace tu programa cuando ya está en marcha.","requires":["manejo-de-errores"],"aliases":["logging","observability"]},{"id":"idempotencia-y-reintentos","branch":"universal","title":"Idempotencia y reintentos","desc":"Repetir una operación sin duplicar su efecto.","requires":["manejo-de-errores","api-rest"],"aliases":["idempotency","retries"]},{"id":"contenedores","branch":"universal","title":"Contenedores","desc":"Empaquetar una app con lo que necesita para ejecutarse igual en todas partes.","requires":["control-de-versiones"],"aliases":["containers","docker"]},{"id":"infraestructura-como-codigo","branch":"universal","title":"Infraestructura como código","desc":"Describir servidores y servicios en archivos versionados.","requires":["control-de-versiones"],"aliases":["iac","infrastructure-as-code"]},{"id":"js-closures","branch":"lang:javascript","title":"Closures","desc":"Funciones que recuerdan las variables del sitio donde nacieron.","requires":["funciones"],"aliases":["closures"]},{"id":"js-desestructuracion","branch":"lang:javascript","title":"Desestructuración y spread","desc":"Sacar y copiar partes de objetos y listas con una sintaxis corta.","requires":["estructuras-de-datos"],"aliases":["destructuring","spread-operator"]},{"id":"js-prototipos-y-clases","branch":"lang:javascript","title":"Prototipos y clases","desc":"Cómo JavaScript hereda comportamiento entre objetos.","requires":["programacion-orientada-a-objetos"],"aliases":["prototypes","classes"]},{"id":"js-event-loop","branch":"lang:javascript","title":"Event loop","desc":"Cómo JavaScript reparte el tiempo entre tareas.","requires":["asincronia"],"aliases":["event-loop"]},{"id":"js-promesas-y-async-await","branch":"lang:javascript","title":"Promesas y async/await","desc":"Esperar resultados sin bloquear y leer el orden de ejecución.","requires":["js-event-loop"],"aliases":["async-await","promises","orden-con-async-await"]},{"id":"js-modulos-esm","branch":"lang:javascript","title":"Módulos ES","desc":"Importar y exportar código entre archivos.","requires":["modularidad"],"aliases":["esm","es-modules"]},{"id":"ts-tipos-estaticos","branch":"lang:typescript","title":"Tipos estáticos","desc":"Comprobar los tipos antes de ejecutar el programa.","requires":["variables-y-tipos"],"aliases":["static-typing"]},{"id":"ts-interfaces-y-alias","branch":"lang:typescript","title":"Interfaces y alias de tipo","desc":"Dar nombre a la forma de los datos.","requires":["ts-tipos-estaticos"],"aliases":["interfaces","type-aliases"]},{"id":"ts-genericos","branch":"lang:typescript","title":"Genéricos","desc":"Escribir código que funciona con varios tipos sin perder precisión.","requires":["ts-interfaces-y-alias"],"aliases":["generics"]},{"id":"ts-uniones-y-narrowing","branch":"lang:typescript","title":"Uniones y estrechamiento","desc":"Distinguir entre varios tipos posibles con comprobaciones.","requires":["ts-interfaces-y-alias"],"aliases":["union-types","narrowing"]},{"id":"ts-configuracion","branch":"lang:typescript","title":"Configuración de TypeScript","desc":"Qué controla tsconfig y cómo afecta al proyecto.","requires":["ts-tipos-estaticos","modularidad"],"aliases":["tsconfig"]},{"id":"py-tipado-y-hints","branch":"lang:python","title":"Tipado dinámico y type hints","desc":"Python no obliga a declarar tipos, pero puedes anotarlos.","requires":["variables-y-tipos"],"aliases":["type-hints"]},{"id":"py-comprensiones","branch":"lang:python","title":"Comprensiones","desc":"Construir listas y diccionarios en una sola expresión.","requires":["estructuras-de-datos"],"aliases":["comprehensions","list-comprehensions"]},{"id":"py-decoradores","branch":"lang:python","title":"Decoradores","desc":"Envolver una función para añadirle comportamiento.","requires":["funciones"],"aliases":["decorators"]},{"id":"py-generadores","branch":"lang:python","title":"Generadores","desc":"Producir valores uno a uno en lugar de todos de golpe.","requires":["funciones"],"aliases":["generators"]},{"id":"py-entornos-virtuales","branch":"lang:python","title":"Entornos virtuales","desc":"Aislar las dependencias de cada proyecto.","requires":["modularidad"],"aliases":["virtualenv","venv"]},{"id":"py-asyncio","branch":"lang:python","title":"asyncio","desc":"Programación asíncrona con corrutinas en Python.","requires":["asincronia"],"aliases":["asyncio"]},{"id":"react-componentes","branch":"fw:react","title":"Componentes","desc":"Una función que devuelve lo que se pinta.","requires":["funciones"],"aliases":["components","component-function"]},{"id":"react-estado-y-props","branch":"fw:react","title":"Estado y props","desc":"Datos que entran en un componente y datos que cambian dentro de él.","requires":["react-componentes"],"aliases":["state-and-props"]},{"id":"react-hooks","branch":"fw:react","title":"Hooks","desc":"Funciones que dan estado y efectos a los componentes.","requires":["react-estado-y-props"],"aliases":["hooks"]},{"id":"react-efectos","branch":"fw:react","title":"Efectos y ciclo de vida","desc":"Qué ocurre cuando un componente aparece, cambia o desaparece.","requires":["react-hooks"],"aliases":["effects","useeffect"]},{"id":"react-contexto","branch":"fw:react","title":"Contexto y estado global","desc":"Compartir datos con muchos componentes sin pasarlos uno a uno.","requires":["react-hooks"],"aliases":["context","global-state"]},{"id":"next-rutas","branch":"fw:nextjs","title":"Rutas del App Router","desc":"Cómo las carpetas se convierten en páginas.","requires":["react-componentes"],"aliases":["rutas-del-app-router","app-router"]},{"id":"next-server-components","branch":"fw:nextjs","title":"Componentes de servidor","desc":"Componentes que se ejecutan en el servidor y no envían su código al cliente.","requires":["next-rutas"],"aliases":["server-components"]},{"id":"next-datos-y-cache","branch":"fw:nextjs","title":"Datos y caché","desc":"Dónde se piden los datos y cuánto tiempo se reutilizan.","requires":["next-server-components"],"aliases":["data-fetching","caching"]},{"id":"next-rutas-api","branch":"fw:nextjs","title":"Rutas de API","desc":"Endpoints que viven dentro de la propia app.","requires":["next-rutas","api-rest"],"aliases":["route-handlers","api-routes"]},{"id":"express-middleware","branch":"fw:express","title":"Middleware","desc":"Funciones que procesan la petición antes de llegar a la ruta.","requires":["funciones"],"aliases":["middleware"]},{"id":"express-enrutado","branch":"fw:express","title":"Enrutado","desc":"Asociar direcciones y métodos HTTP con funciones.","requires":["express-middleware"],"aliases":["routing"]},{"id":"express-errores","branch":"fw:express","title":"Manejo de errores en Express","desc":"Un único sitio donde acaban los errores de la API.","requires":["express-middleware","manejo-de-errores"],"aliases":["express-error-handling"]},{"id":"express-validacion","branch":"fw:express","title":"Validación con esquemas","desc":"Declarar la forma esperada de la entrada y rechazar el resto.","requires":["express-middleware","validacion-de-entrada"],"aliases":["schema-validation"]},{"id":"fastapi-rutas","branch":"fw:fastapi","title":"Rutas y parámetros","desc":"Funciones decoradas que atienden peticiones.","requires":["funciones"],"aliases":["path-operations"]},{"id":"fastapi-pydantic","branch":"fw:fastapi","title":"Modelos Pydantic","desc":"Describir y validar datos con clases tipadas.","requires":["py-tipado-y-hints"],"aliases":["pydantic"]},{"id":"fastapi-dependencias","branch":"fw:fastapi","title":"Inyección de dependencias","desc":"Pedir lo que una ruta necesita en vez de crearlo dentro.","requires":["fastapi-rutas"],"aliases":["dependency-injection"]},{"id":"fastapi-async","branch":"fw:fastapi","title":"Async en FastAPI","desc":"Cuándo usar rutas asíncronas y cuándo no.","requires":["fastapi-rutas","py-asyncio"],"aliases":["fastapi-async-routes"]},{"id":"app-arquitectura","branch":"kind:app","title":"Arquitectura de la app","desc":"Cómo se reparten las responsabilidades dentro de la aplicación.","requires":["arquitectura-en-capas"],"aliases":["app-architecture"]},{"id":"app-estado","branch":"kind:app","title":"Estado de la aplicación","desc":"Dónde vive el estado y quién puede cambiarlo.","requires":["estructuras-de-datos"],"aliases":["app-state"]},{"id":"app-configuracion","branch":"kind:app","title":"Configuración por entorno","desc":"Que la misma app funcione en desarrollo y en producción.","requires":["control-de-versiones"],"aliases":["environment-config"]},{"id":"app-despliegue","branch":"kind:app","title":"Despliegue","desc":"Llevar la app a un servidor y mantenerla en marcha.","requires":["contenedores","integracion-continua"],"aliases":["deployment"]},{"id":"lib-api-publica","branch":"kind:libreria","title":"Diseño de API pública","desc":"Qué exponer y qué esconder para que sea fácil de usar bien.","requires":["modularidad"],"aliases":["public-api","api-publica"]},{"id":"lib-versionado","branch":"kind:libreria","title":"Versionado semántico","desc":"Qué significa subir la versión mayor, menor o de parche.","requires":["control-de-versiones"],"aliases":["semver"]},{"id":"lib-documentacion","branch":"kind:libreria","title":"Documentación de API","desc":"Explicar cómo usar la librería con ejemplos que funcionan.","requires":["lib-api-publica"],"aliases":["api-docs"]},{"id":"lib-publicacion","branch":"kind:libreria","title":"Publicación de paquetes","desc":"Empaquetar y publicar una versión para que otros la instalen.","requires":["lib-versionado"],"aliases":["publishing"]},{"id":"plugin-manifiesto","branch":"kind:plugin","title":"Manifiesto del plugin","desc":"El archivo que declara qué es el plugin y qué aporta.","requires":["modularidad"],"aliases":["plugin-manifest","contrato-del-plugin"]},{"id":"plugin-hooks","branch":"kind:plugin","title":"Hooks y eventos","desc":"Reaccionar a lo que ocurre en la herramienta anfitriona.","requires":["plugin-manifiesto"],"aliases":["hooks-and-events"]},{"id":"plugin-skills","branch":"kind:plugin","title":"Skills y comandos","desc":"Instrucciones y atajos que el plugin ofrece al usuario.","requires":["plugin-manifiesto"],"aliases":["skills","commands"]},{"id":"plugin-permisos","branch":"kind:plugin","title":"Permisos y seguridad del plugin","desc":"Qué puede hacer un plugin y cómo limitarlo.","requires":["seguridad-basica","plugin-hooks"],"aliases":["plugin-permissions"]},{"id":"mcp-protocolo","branch":"kind:mcp","title":"Protocolo MCP","desc":"Cómo un cliente descubre y llama a las herramientas de un servidor.","requires":["funciones"],"aliases":["mcp-protocol"]},{"id":"mcp-esquemas","branch":"kind:mcp","title":"Esquemas de herramientas","desc":"Declarar qué entrada acepta cada herramienta.","requires":["validacion-de-entrada","mcp-protocolo"],"aliases":["tool-schemas"]},{"id":"mcp-transporte","branch":"kind:mcp","title":"Transportes stdio y HTTP","desc":"Por dónde se comunican el cliente y el servidor.","requires":["mcp-protocolo"],"aliases":["transports"]},{"id":"mcp-errores","branch":"kind:mcp","title":"Errores en herramientas","desc":"Cómo informar de un fallo para que el modelo pueda corregir.","requires":["manejo-de-errores","mcp-protocolo"],"aliases":["tool-errors"]},{"id":"int-contrato","branch":"kind:integracion","title":"Contrato con el otro sistema","desc":"Qué promete el otro servicio y qué esperas tú.","requires":["api-rest"],"aliases":["integration-contract"]},{"id":"int-oauth","branch":"kind:integracion","title":"Autenticación OAuth","desc":"Acceder en nombre de un usuario sin guardar su contraseña.","requires":["autenticacion-y-autorizacion","int-contrato"],"aliases":["oauth"]},{"id":"int-reintentos","branch":"kind:integracion","title":"Reintentos y límites","desc":"Qué hacer cuando el otro sistema falla o te frena.","requires":["idempotencia-y-reintentos","int-contrato"],"aliases":["retries-and-limits"]},{"id":"int-mapeo","branch":"kind:integracion","title":"Mapeo de datos","desc":"Traducir los datos de un sistema a la forma del otro.","requires":["estructuras-de-datos","int-contrato"],"aliases":["data-mapping"]},{"id":"script-entrada","branch":"kind:script","title":"Argumentos y entrada estándar","desc":"Cómo recibe datos un programa de línea de comandos.","requires":["funciones"],"aliases":["cli-args","stdin"]},{"id":"script-salida","branch":"kind:script","title":"Códigos de salida","desc":"Cómo avisa un script de si salió bien o mal.","requires":["manejo-de-errores"],"aliases":["exit-codes"]},{"id":"infra-entornos","branch":"kind:infraestructura","title":"Entornos y variables","desc":"Separar desarrollo, pruebas y producción.","requires":["control-de-versiones"],"aliases":["environments"]},{"id":"infra-secretos","branch":"kind:infraestructura","title":"Secretos","desc":"Guardar claves y contraseñas fuera del código.","requires":["seguridad-basica"],"aliases":["secrets"]},{"id":"infra-reproducibilidad","branch":"kind:infraestructura","title":"Reproducibilidad","desc":"Que el mismo código produzca siempre el mismo entorno.","requires":["infraestructura-como-codigo"],"aliases":["reproducibility"]}]};/*CATALOG:END*/
+const NODE_BY_ID=new Map(CATALOG.nodes.map(n=>[n.id,n]));
+const BRANCH_BY_ID=new Map(CATALOG.branches.map(b=>[b.id,b]));
+const ALIAS=new Map();
+CATALOG.nodes.forEach(n=>{ALIAS.set(n.id,n.id);(n.aliases||[]).forEach(a=>ALIAS.set(a,n.id));});
+const resolveNode=(slug)=>ALIAS.get(slug)||null;
+const MAP_STATE_LABEL={descubierto:'Descubierto',frontera:'Frontera',conocido:'Ya lo conoces','sin-explorar':'Sin explorar'};
+const NW=176,NH=64,GX=60,GY=14;
+
+function lessonBranches(l){
+  const out=new Set(['universal']);
+  (l.languages||[]).forEach(x=>{if(BRANCH_BY_ID.has('lang:'+x))out.add('lang:'+x);});
+  (l.frameworks||[]).forEach(x=>{if(BRANCH_BY_ID.has('fw:'+x))out.add('fw:'+x);});
+  if(l.kind&&BRANCH_BY_ID.has('kind:'+l.kind))out.add('kind:'+l.kind);
+  return out;
+}
+function primaryBranch(l){
+  const pick=(prefix,arr)=>(arr||[]).map(x=>prefix+x).find(id=>BRANCH_BY_ID.has(id));
+  if(l.scope==='lenguaje')return pick('lang:',l.languages)||'universal';
+  if(l.scope==='framework')return pick('fw:',l.frameworks)||'universal';
+  if(l.scope==='tipo')return(l.kind&&BRANCH_BY_ID.has('kind:'+l.kind))?'kind:'+l.kind:'universal';
+  return 'universal';
+}
+function bestProgress(ls){
+  const st=ls.map(stateOf);
+  if(st.includes('oxidado'))return 'oxidado';
+  if(st.includes('nuevo'))return 'nuevo';
+  if(st.every(s=>s==='dominado'))return 'dominado';
+  return 'aprendiendo';
+}
+/* discovered = a lesson exists, known = the diagnostic said so, frontier = every prerequisite is satisfied
+   and the branch is one of the learner's, unexplored = the rest */
+function computeMap(){
+  const found=new Map(),extras=[],relevant=new Set(['universal']);
+  S.lessons.forEach(l=>{
+    lessonBranches(l).forEach(b=>relevant.add(b));
+    const id=resolveNode(l.id);
+    if(id){if(!found.has(id))found.set(id,[]);found.get(id).push(l);}else extras.push(l);
+  });
+  const known=new Set(((S.profile&&S.profile.known)||[]).map(resolveNode).filter(Boolean));
+  const rusty=new Set(((S.profile&&S.profile.rusty)||[]).map(resolveNode).filter(Boolean));
+  const satisfied=(id)=>found.has(id)||known.has(id)||rusty.has(id);
+  const nodes=new Map();
+  CATALOG.nodes.forEach(n=>{
+    let state='sin-explorar';
+    if(found.has(n.id))state='descubierto';
+    else if(known.has(n.id)||rusty.has(n.id))state='conocido';
+    else if(relevant.has(n.branch)&&n.requires.every(satisfied))state='frontera';
+    nodes.set(n.id,{...n,state,lessons:found.get(n.id)||[],prog:found.has(n.id)?bestProgress(found.get(n.id)):null,rusty:rusty.has(n.id)&&!found.has(n.id)});
+  });
+  extras.forEach(l=>nodes.set(l.id,{id:l.id,branch:primaryBranch(l),title:l.title,desc:(l.context&&l.context.learning)||'',requires:[],aliases:[],extra:true,state:'descubierto',lessons:[l],prog:bestProgress([l]),rusty:false}));
+  const frontier=CATALOG.nodes.filter(n=>nodes.get(n.id).state==='frontera').map(n=>n.id);
+  const byBranch={};
+  CATALOG.branches.forEach(b=>{byBranch[b.id]={total:0,disc:0,front:0};});
+  nodes.forEach(n=>{const b=byBranch[n.branch];b.total++;if(n.state==='descubierto'||n.state==='conocido')b.disc++;if(n.state==='frontera')b.front++;});
+  return{nodes,frontier,byBranch,relevant};
+}
+function layout(branchId,map){
+  const list=[...map.nodes.values()].filter(n=>n.branch===branchId);
+  const inBranch=new Set(list.map(n=>n.id));
+  const depth=new Map();
+  const dep=(n)=>{
+    if(depth.has(n.id))return depth.get(n.id);
+    depth.set(n.id,0);
+    let d=0;
+    n.requires.forEach(r=>{if(inBranch.has(r))d=Math.max(d,dep(map.nodes.get(r))+1);});
+    depth.set(n.id,d);
+    return d;
+  };
+  list.filter(n=>!n.extra).forEach(dep);
+  let maxD=0;depth.forEach(v=>{maxD=Math.max(maxD,v);});
+  const hasCatalog=list.some(n=>!n.extra);
+  list.filter(n=>n.extra).forEach(n=>depth.set(n.id,hasCatalog?maxD+1:0));
+  const cols=new Map();
+  list.forEach(n=>{const d=depth.get(n.id);if(!cols.has(d))cols.set(d,[]);cols.get(d).push(n);});
+  const pos=new Map();let width=0,height=0;
+  [...cols.keys()].sort((a,b)=>a-b).forEach(d=>{
+    const col=cols.get(d);
+    const key=(n)=>{const ys=n.requires.filter(r=>pos.has(r)).map(r=>pos.get(r).y);return ys.length?ys.reduce((a,b)=>a+b,0)/ys.length:Infinity;};
+    const order=new Map(col.map((n,i)=>[n.id,i]));
+    if(d>0)col.sort((a,b)=>(key(a)-key(b))||(order.get(a.id)-order.get(b.id)));
+    col.forEach((n,i)=>{const x=d*(NW+GX),y=i*(NH+GY);pos.set(n.id,{x,y});width=Math.max(width,x+NW);height=Math.max(height,y+NH);});
+  });
+  const edges=[];
+  list.forEach(n=>n.requires.forEach(r=>{if(inBranch.has(r))edges.push([r,n.id]);}));
+  return{list,pos,edges,width,height};
+}
+function svgEl(tag,attrs){const e=document.createElementNS('http://www.w3.org/2000/svg',tag);Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v));return e;}
+const nodeLabel=(n)=>n.rusty?'Oxidado (perfil)':MAP_STATE_LABEL[n.state]+(n.prog==='oxidado'?' · oxidado':n.prog==='dominado'?' · dominado':'');
+function selectNode(id,map){
+  const n=map.nodes.get(id);if(!n)return;
+  S.mapNode=id;S.mapBranch=n.branch;render();
+}
+function mapGraph(branchId,map){
+  const L=layout(branchId,map);
+  const canvas=h('div',{class:'mapcanvas',style:`width:${L.width}px;height:${L.height}px`});
+  const svg=svgEl('svg',{width:L.width,height:L.height,'aria-hidden':'true'});
+  L.edges.forEach(([a,b])=>{
+    const pa=L.pos.get(a),pb=L.pos.get(b);
+    const x1=pa.x+NW,y1=pa.y+NH/2,x2=pb.x,y2=pb.y+NH/2,dx=GX*0.6;
+    const ok=(id)=>['descubierto','conocido'].includes(map.nodes.get(id).state);
+    svg.append(svgEl('path',{d:`M${x1} ${y1}C${x1+dx} ${y1} ${x2-dx} ${y2} ${x2} ${y2}`,class:'edge'+(ok(a)&&ok(b)?' on':'')}));
+  });
+  canvas.append(svg);
+  L.list.forEach(n=>{
+    const p=L.pos.get(n.id);
+    canvas.append(h('button',{type:'button',class:'node '+n.state+(n.prog==='oxidado'||n.rusty?' oxidado':''),style:`left:${p.x}px;top:${p.y}px;width:${NW}px;height:${NH}px`,title:n.title,'aria-pressed':String(S.mapNode===n.id),onclick:()=>{S.mapNode=n.id;render();}},
+      h('span',{class:'nt'},n.title),h('small',{},nodeLabel(n))));
+  });
+  return h('div',{class:'mapwrap'},canvas);
+}
+async function explainNode(n){
+  const prev=S.explain[n.id];if(prev&&prev.busy)return;
+  const st=S.explain[n.id]={busy:true,text:'',error:'',ctl:new AbortController()};
+  render();
+  const langs=[...new Set(S.lessons.flatMap(l=>l.languages||[]))];
+  const prompt=[
+    'Eres un tutor de programación. Explica en español y en un máximo de 8 líneas el concepto «'+n.title+'» ('+n.desc+').',
+    langs.length?'Si ayuda, usa un ejemplo mínimo de código en '+langs[0]+'.':'Si ayuda, usa un ejemplo mínimo de código.',
+    'Termina con una pregunta corta para comprobar que se entendió. No uses encabezados.'
+  ].join('\n');
+  try{
+    const r=await S.sample(prompt,{signal:st.ctl.signal,onText:({text})=>{st.text=text;const el=document.getElementById('explain-out');if(el)el.textContent=text;}});
+    st.text=r.text;
+  }catch(err){
+    const code=err&&err.code;
+    if(code==='cancelled'){st.text=(err&&err.text)||st.text;}
+    else{
+      if(code==='not_granted'||code==='sampling_disabled'||code==='not_declared'||code==='capability_disabled'||code==='capability_removed')S.sample=null;
+      st.error=sampleCopy(code);
+    }
+  }
+  st.busy=false;st.ctl=null;render();
+}
+function mapPanel(map){
+  const n=map.nodes.get(S.mapNode);
+  if(!n)return h('div',{class:'panel'},h('p',{class:'note'},'Elige un concepto del mapa para ver qué es y cómo llegar a él.'));
+  const br=BRANCH_BY_ID.get(n.branch);
+  const root=h('div',{class:'panel'});
+  root.append(h('div',{class:'tags'},h('span',{class:'tag'},br?br.label:'Universal'),h('span',{class:'pill '+n.state},MAP_STATE_LABEL[n.state]),n.prog?h('span',{class:'pill '+n.prog},STATE_LABEL[n.prog]||n.prog):null,n.rusty?h('span',{class:'pill oxidado'},'Oxidado (perfil)'):null),
+    h('h3',{style:'margin-top:8px'},n.title));
+  if(n.desc)root.append(h('p',{class:'sub',style:'margin:4px 0 0'},n.desc));
+  const chip=(id)=>{
+    const m=map.nodes.get(id);if(!m)return null;
+    const ok=m.state==='descubierto'||m.state==='conocido';
+    return h('button',{class:'chip',type:'button',onclick:()=>selectNode(id,map)},(ok?'✓ ':'○ ')+m.title);
+  };
+  if(n.requires.length)root.append(h('div',{class:'label'},'Antes necesitas'),h('div',{class:'nodelist'},n.requires.map(chip)));
+  const unlocks=[...map.nodes.values()].filter(x=>x.requires.includes(n.id));
+  if(unlocks.length)root.append(h('div',{class:'label'},'Te abre el camino a'),h('div',{class:'nodelist'},unlocks.map(x=>chip(x.id))));
+  if(n.lessons.length){
+    root.append(h('div',{class:'label'},'Tus lecciones'),h('div',{class:'nodelist'},n.lessons.map(l=>h('button',{class:'chip',type:'button',onclick:()=>{S.open=l.id;location.hash='#lecciones';}},l.title))));
+  }else{
+    root.append(h('p',{class:'note',style:'margin-top:12px'},n.state==='frontera'?'Es lo siguiente que puedes aprender. Aparecerá en tus lecciones cuando un commit lo use.':n.state==='conocido'?'Lo marcaste en el diagnóstico. Si un commit lo usa, aparecerá en tus lecciones.':'Aún no hay camino hasta aquí. Se abre cuando conozcas lo que lo precede.'));
+  }
+  if(S.sample){
+    const st=S.explain[n.id]||{};
+    root.append(h('div',{class:'cta',style:'margin-top:12px'},
+      st.busy?h('button',{class:'btn',type:'button',onclick:()=>st.ctl&&st.ctl.abort()},'Parar'):h('button',{class:'btn primary',type:'button',onclick:()=>explainNode(n)},st.text?'Explicar de nuevo':'Explorar con Claude')));
+    if(st.busy&&!st.text)root.append(h('p',{class:'note'},'Pensando…'));
+    if(st.text)root.append(h('div',{class:'explain',id:'explain-out'},st.text));
+    if(st.error)root.append(h('p',{class:'note',style:'color:var(--bad)'},st.error));
+  }
+  return root;
+}
+function viewMapa(){
+  const map=computeMap();
+  const root=h('div',{style:'padding-top:12px'});
+  root.append(h('h2',{},'Mapa'),h('p',{class:'sub'},'Lo que ya has visto, lo que tienes al lado y lo que aún no has explorado. Las ramas salen de tus proyectos.'));
+  if(!BRANCH_BY_ID.has(S.mapBranch))S.mapBranch='universal';
+  const inBranch=CATALOG.nodes.filter(n=>n.branch===S.mapBranch).map(n=>n.id);
+  if(!S.mapNode||!map.nodes.has(S.mapNode)||map.nodes.get(S.mapNode).branch!==S.mapBranch){
+    S.mapNode=inBranch.find(id=>map.nodes.get(id).state==='frontera')||inBranch[0]||null;
+  }
+  const rel=CATALOG.branches.filter(b=>map.relevant.has(b.id));
+  const others=CATALOG.branches.filter(b=>!map.relevant.has(b.id));
+  const bar=h('div',{class:'mapbar',role:'group','aria-label':'Ramas'});
+  rel.forEach(b=>{const c=map.byBranch[b.id];bar.append(h('button',{class:'chip',type:'button','aria-pressed':String(S.mapBranch===b.id),onclick:()=>{S.mapBranch=b.id;S.mapNode=null;render();}},`${b.label} ${c.disc}/${c.total}`));});
+  if(others.length){
+    const sel=h('select',{id:'map-more','aria-label':'Explorar otra rama',onchange:(ev)=>{if(ev.target.value){S.mapBranch=ev.target.value;S.mapNode=null;render();}}},
+      h('option',{value:''},'Explorar otra rama…'),others.map(b=>h('option',{value:b.id},`${b.label} (${b.type})`)));
+    sel.value=others.some(b=>b.id===S.mapBranch)?S.mapBranch:'';
+    bar.append(sel);
+  }
+  root.append(bar);
+  const fr=map.frontier.slice(0,6);
+  if(fr.length){
+    root.append(h('div',{class:'label',style:'margin-top:0'},'Tu frontera'),h('div',{class:'nodelist',style:'margin-bottom:14px'},fr.map(id=>h('button',{class:'chip',type:'button',onclick:()=>selectNode(id,map)},NODE_BY_ID.get(id).title))));
+  }
+  const c=map.byBranch[S.mapBranch];
+  const br=BRANCH_BY_ID.get(S.mapBranch);
+  root.append(h('p',{class:'mapsum'},`${br.label}: ${c.disc} ${c.disc===1?'conocido':'conocidos'}, ${c.front} en la frontera, ${c.total-c.disc-c.front} sin explorar.`));
+  root.append(h('div',{class:'legend'},[['descubierto','Descubierto'],['conocido','Ya lo conoces'],['frontera','Frontera'],['sin-explorar','Sin explorar']].map(([k,t])=>h('span',{},h('i',{class:k}),t))));
+  root.append(mapGraph(S.mapBranch,map),mapPanel(map));
+  return root;
+}
+
 /* ---------- shell ---------- */
-const VIEWS={inicio:viewInicio,lecciones:viewLecciones,repaso:viewRepaso,conceptos:viewConceptos,perfil:viewPerfil};
+const VIEWS={inicio:viewInicio,lecciones:viewLecciones,repaso:viewRepaso,conceptos:viewConceptos,mapa:viewMapa,perfil:viewPerfil};
 function route(){
   const hash=(location.hash||'').slice(1);
   if(S.progressLoaded&&S.uid&&!S.profile&&!S.skipSetup&&hash!=='instalar')return 'perfil';
@@ -670,7 +902,7 @@ function render(){
   if(cur!=='repaso')S.reviewIds=null;
   const due=S.lessons.filter(l=>stateOf(l)==='oxidado').length;
   const nav=document.getElementById('nav');
-  nav.replaceChildren(...[['inicio','Inicio',null],['lecciones','Lecciones',null],['repaso','Repaso',due||null],['conceptos','Conceptos',null],['perfil','Perfil',null]].map(([id,label,n])=>
+  nav.replaceChildren(...[['inicio','Inicio',null],['lecciones','Lecciones',null],['repaso','Repaso',due||null],['conceptos','Conceptos',null],['mapa','Mapa',null],['perfil','Perfil',null]].map(([id,label,n])=>
     h('a',{href:'#'+id,'aria-current':cur===id?'page':null},label,n?h('span',{class:'n'},String(n)):null)));
   document.getElementById('view').replaceChildren(VIEWS[cur]());
   paintToast();

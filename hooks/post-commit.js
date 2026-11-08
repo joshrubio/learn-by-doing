@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const shared = require(path.join(__dirname, '..', 'scripts', 'shared.js'));
 const detector = require(path.join(__dirname, '..', 'scripts', 'detect.js'));
+const catalog = require(path.join(__dirname, '..', 'scripts', 'catalog.js'));
 
 const COMMIT_CMD = /\bgit\s+(?:-C\s+\S+\s+|-c\s+\S+\s+)*commit\b/;
 const FRESH_SECONDS = 300;
@@ -137,6 +138,7 @@ function main(raw) {
     detectedLine(det, kind, kindSource),
     `For a ${kind} project, favor lessons about: ${shared.KIND_FOCUS[kind] || shared.KIND_FOCUS.otro}`,
     'Every lesson needs a "scope": universal (any language), lenguaje (tied to a language), framework (tied to a framework) or tipo (tied to this kind of project). Languages and frameworks are filled in automatically from the package of the lesson\'s code.file, so do not invent them. If you set them, they must come from the lists above.',
+    `Concepts in the catalog that the study-space map is built on. When the idea of a lesson matches one, use its id as the lesson's "concept"; otherwise write a new descriptive kebab-case slug: ${catalog.slugsFor(det, kind).join(', ')}.`,
     `Size: ${useful.length} file(s), ${lines} line(s) changed${large ? ' -> LARGE commit, apply the large-commit rule' : ''}.`,
     'Changed areas:',
     areaList,
