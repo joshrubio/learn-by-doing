@@ -6,7 +6,7 @@ Most of your code will be written by AI. What you need is the ability to read it
 
 Nothing interrupts your work. The lessons wait until you open the study space.
 
-> Status: prototype (v0.4.0). The study space is in Spanish for now.
+> Status: prototype (v0.6.1). The study space is in Spanish for now.
 
 ## Requirements
 
@@ -35,7 +35,7 @@ Restart the session after installing. You do not install it per repo. Instead, i
 ## Use
 
 1. Work as usual and ask Claude to commit. **The first time in each repo, Claude asks once** whether you want Learn by Doing to learn from it, and remembers the answer. If you say no, the plugin stays silent there. Change it any time with `/learn-repo on|off|status`.
-2. In repos you turned on, the plugin saves 1 to 3 lessons per commit (up to 4 for a large one) and adds a single line to Claude's reply.
+2. In repos you turned on, the plugin saves 1 to 3 lessons per commit (up to 4 for a large one) and adds a single line to Claude's reply, such as "2 lecciones guardadas, 7 pendientes de sincronizar. Ejecuta /study." The count is how many new or edited notes are waiting to reach the study space.
 3. Run `/study`. It syncs new and edited notes and your profile to your study space and opens it. The first time it creates the Artifact in your account and tells you that code snippets are uploaded to it.
 4. The first time you open the study space it asks how you want to learn (see below). Then study.
 
@@ -154,7 +154,7 @@ Open exercises are graded against key points by Claude, using the Artifact's ask
 - **Lecciones**: filter by project, area and state, grouped by commit.
 - **Repaso**: spaced review with intervals of 1, 3, 7, 16 and 35 days. A concept you got wrong goes back to the start; a partly right one stays where it is.
 - **Conceptos**: everything you have seen, with its state and in how many projects it appeared. A concept has one state, shared by all your projects.
-- **Mapa**: a map of what you have discovered, what is next to it and what is unexplored (see below).
+- **Mapa**: a map of what you have discovered, what is next to it and what is unexplored (see "The map" above).
 - **Perfil**: your exercise choices, with the button to change them.
 
 States: new, learning, rusty (due for review), mastered.
@@ -166,7 +166,9 @@ git commit by Claude, in any repo
    -> PostToolUse hook (Node) checks the repo's decision
         off       -> silent, no tokens
         undecided -> short message asking Claude to ask you once, no patch
-        on        -> commit message, areas, patch and your profile
+        on        -> commit message, areas, patch, your profile, the repo's kind and
+                     detected languages and frameworks, the catalog concepts that fit,
+                     and how many notes are waiting to sync
    -> the learn-by-doing skill writes lessons and saves them as notes through the plugin's
       MCP tool save_lessons (no shell commands, no temp files)
 /study
@@ -201,6 +203,8 @@ To pause the plugin everywhere, create an empty file `~/.learn-by-doing/off`, or
 - A profile change reaches the lessons Claude writes after your next `/study`, because the plugin reads the profile then.
 - Lesson quality depends on Claude following the skill. The script validates the shape of each lesson, not its content.
 - Creating the Artifact the first time and each sync ask for your approval in Claude Code.
+- **Syncing is manual.** New lessons reach the study space only when you run `/study`, from any folder: it syncs everything waiting, whichever repo it came from. Opening the study space alone shows what is already synced. Answers and progress are saved live and need no `/study`. The study space cannot sync by itself because a published page could not reach the plugin's local MCP server in the Claude desktop app (tested with Claude 4.23118.0: both the plugin's server and one registered in the user MCP config returned `server_not_connected`). Syncing after every commit would cost extra model calls per commit, so the reminder line is the chosen compromise.
+- The desktop app rewrites `~/.claude.json` while it runs and can drop entries added from outside. If you edit your MCP configuration, do it with the app closed.
 - Detection relies on manifests and extensions and knows about 35 common frameworks. An unusual layout may come out as `otro` or miss a framework. Correct the kind in the activation question.
 - The catalog covers common concepts only. A language or framework that is not in it has no branch yet, so its lessons show up as extra nodes in the universal branch.
 - If two concepts mean the same thing under different names, they are kept apart. The skill is told to reuse existing names, which prevents most of it.
@@ -209,6 +213,7 @@ To pause the plugin everywhere, create an empty file `~/.learn-by-doing/off`, or
 ## Ideas for later
 
 - More catalog branches (Go, Rust, Vue, Django, Spring...) and prerequisites you can edit from the study space.
+- An "Import notes" button in the study space with a folder picker, so notes can reach it without Claude Code. It would need the sync state to live in the study space's database so the page and `/study` do not clash.
 - Export your progress and profile into the notes too.
 - Semantic search across notes once a collection is large enough to need it.
 
