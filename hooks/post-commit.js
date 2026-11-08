@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 const { execFileSync } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const COMMIT_CMD = /\bgit\s+(?:-C\s+\S+\s+|-c\s+\S+\s+)*commit\b/;
@@ -35,7 +36,8 @@ function main(raw) {
   if (!COMMIT_OUT.test(out)) return;
 
   const cwd = input.cwd || process.cwd();
-  if (fs.existsSync(path.join(cwd, '.learn', 'off'))) return;
+  const lbdHome = process.env.LBD_HOME || path.join(os.homedir(), '.learn-by-doing');
+  if (fs.existsSync(path.join(lbdHome, 'off')) || fs.existsSync(path.join(cwd, '.learn-off'))) return;
 
   let hash, message, numstat, patch;
   try {

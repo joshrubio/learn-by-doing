@@ -11,15 +11,19 @@ Goal: the user is learning to code by working with AI. After each commit, save a
 
 A hook adds a `[learn-by-doing]` message after a commit, with the commit hash, size, changed areas and the patch. Follow it silently, save the lessons, then end your reply with one line saying how many were saved and that `/study` opens them.
 
+## Where things live
+
+Everything is stored centrally in `~/.learn-by-doing/` (or `$LBD_HOME`), shared by all projects, so concepts and progress carry across repos. Per-project folders are not used. The study space is an Artifact that `/study` creates and syncs.
+
 ## Profile (optional)
 
-If `.learn/profile.json` exists, read it first. Fields, all optional:
+If `~/.learn-by-doing/profile.json` exists, read it first. Fields, all optional:
 - `language`: language of the lessons. Default: the language the user writes in.
 - `emphasis`: weights per lesson type, for example `{"decision": 3, "concepto": 1}`. A higher weight means choose that type more often.
 - `rusty`: concepts the user studied long ago and forgot. Teach these as a short refresher, not from zero.
 - `known`: concepts to skip.
 
-Run `node <plugin>/scripts/lbd.js list` to see lessons already saved. Do not repeat a concept that is already there. If the code uses it again, skip it, the app handles repeats.
+Run `node <plugin>/scripts/lbd.js list` first to see every concept already saved, across all projects. Reuse an existing slug when the idea is the same, even if the wording differs, so the app can show it as a repeat appearance instead of a duplicate. Do not write a new lesson for a concept that is already there, unless the new code shows a clearly different side of it.
 
 ## What to teach
 
@@ -91,8 +95,10 @@ node "<plugin>/scripts/lbd.js" add --project "<dir>" <<'EOF'
 EOF
 ```
 
-`area` is one of: frontend, backend, base-de-datos, tests, config, codigo, docs, otros. `concept` is a short kebab-case slug, stable across commits so repeats are detected. The script rejects invalid lessons and prints why, fix and resend.
+`area` is one of: frontend, backend, base-de-datos, tests, config, codigo, docs, otros. `concept` is a short kebab-case slug, stable across commits and projects so repeats are detected. For a commit from the past (history mode) add `"date": "YYYY-MM-DD"` to `commit`. The script rejects invalid lessons and prints why, fix and resend.
+
+Saved lessons wait locally until the user runs `/study`, which syncs them to the study space in one batch. Never call the Artifact or ArtifactData tools from a commit hook turn.
 
 ## Privacy
 
-Lessons live in `.learn/` inside the project and that folder ignores itself in git. Do not include secrets, tokens or personal data in `code`.
+Lessons live in `~/.learn-by-doing/` on the user's machine. Only `/study` uploads them, to the user's own private Artifact. Show only the lines that illustrate the concept, never a whole file or diff. Do not include secrets, tokens, internal URLs or personal data in any field.

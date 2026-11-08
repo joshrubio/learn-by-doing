@@ -1,0 +1,403 @@
+<title>Learn by Doing</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a lab notebook. Graph-paper hero, a quiet dashboard below, then working views behind a four-link nav. */
+:root{
+  --bg:#f4f5f2; --surface:#ffffff; --ink:#161b19; --muted:#5b6560; --line:#dadeD8; --grid:#e2e6df;
+  --accent:#2a45d6; --accent-ink:#ffffff; --code:#eceee9;
+  --ok:#1f7a45; --warn:#98600a; --bad:#b3362a;
+  --font-display:"Familjen Grotesk","Segoe UI",system-ui,sans-serif;
+  --font-body:"Public Sans","Segoe UI",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1210; --surface:#161b18; --ink:#e7eae6; --muted:#9aa39d; --line:#2a312d; --grid:#192019;
+  --accent:#8d9eff; --accent-ink:#0b1030; --code:#111613;
+  --ok:#6fd39b; --warn:#e6b655; --bad:#f0897d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1210; --surface:#161b18; --ink:#e7eae6; --muted:#9aa39d; --line:#2a312d; --grid:#192019;
+  --accent:#8d9eff; --accent-ink:#0b1030; --code:#111613;
+  --ok:#6fd39b; --warn:#e6b655; --bad:#f0897d; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{overflow-x:clip}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 var(--font-body);padding-block:0 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:960px;margin:0 auto}
+h1,h2,h3{font-family:var(--font-display);line-height:1.15;text-wrap:balance;margin:0}
+h2{font-size:1.5rem;margin-bottom:6px}
+h3{font-size:1.1rem}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+code,pre,.mono{font-family:var(--font-mono)}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-block:18px}
+.brand{font:700 1.15rem var(--font-display);text-decoration:none;color:var(--ink);letter-spacing:-.01em}
+.brand span{color:var(--accent)}
+nav.main{display:flex;gap:2px;flex-wrap:wrap}
+nav.main a{padding:7px 12px;border-radius:6px;text-decoration:none;color:var(--muted);font-size:.92rem;font-weight:500}
+nav.main a[aria-current="page"]{color:var(--ink);background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}
+nav.main a .n{font-family:var(--font-mono);font-size:.75rem;margin-left:5px;color:var(--accent)}
+.toast{background:var(--surface);border:1px solid var(--bad);color:var(--bad);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:.9rem}
+.hero{position:relative;padding:52px 0 40px;margin-bottom:8px}
+.hero::before{content:"";position:absolute;inset:0 calc(50% - 50vw);z-index:-1;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:28px 28px;-webkit-mask-image:linear-gradient(#000 40%,transparent);mask-image:linear-gradient(#000 40%,transparent)}
+.eyebrow{font:500 .78rem var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+.hero h1{font-size:clamp(2.1rem,6vw,3.4rem);letter-spacing:-.02em;max-width:16ch}
+.hero .lead{max-width:56ch;margin-top:16px;font-size:1.08rem;color:var(--muted)}
+.cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}
+.btn{display:inline-block;font:600 .95rem var(--font-body);border-radius:8px;padding:10px 16px;border:1px solid var(--line);background:var(--surface);color:var(--ink);text-decoration:none;cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:default}
+section.block{margin-top:40px}
+.sub{color:var(--muted);margin-bottom:16px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
+.stat b{display:block;font:600 1.9rem var(--font-display);font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:.88rem}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:14px;margin-top:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.panel h3{margin-bottom:10px}
+.next{border-color:var(--accent)}
+.next p{margin:6px 0 12px;color:var(--muted)}
+.row{display:flex;justify-content:space-between;gap:10px;align-items:baseline;font-size:.92rem}
+.bar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--code);margin:5px 0 12px}
+.bar i{display:block;height:100%}
+.recent{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.recent a{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line);text-decoration:none;color:var(--ink)}
+.recent li:first-child a{border-top:0}
+.recent small{color:var(--muted);white-space:nowrap}
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:12px;counter-reset:s}
+.steps li{counter-increment:s;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
+.steps li::before{content:counter(s);display:block;font:500 .8rem var(--font-mono);color:var(--accent);margin-bottom:6px}
+.steps b{display:block;font-family:var(--font-display);font-size:1.02rem;margin-bottom:4px}
+.steps span{color:var(--muted);font-size:.92rem}
+.cmd{display:flex;gap:8px;align-items:stretch;margin:8px 0}
+.cmd code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;background:var(--code);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:.85rem}
+.cmd button{flex:none}
+.note{font-size:.88rem;color:var(--muted);margin-top:8px}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:26px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--ink);font-family:var(--font-display);font-size:1.15rem;margin-bottom:6px}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.filters select{font:inherit;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.chip{font:500 .85rem var(--font-body);border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:4px 12px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.lesson{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;min-width:0}
+.lesson>button.head{display:block;width:100%;text-align:left;background:none;border:0;color:inherit;font:inherit;padding:14px 16px;cursor:pointer}
+.lesson h3{margin:6px 0 0}
+.tags{display:flex;gap:6px;flex-wrap:wrap}
+.tag{font:500 .72rem var(--font-mono);border:1px solid var(--line);border-radius:4px;padding:1px 7px;color:var(--muted)}
+.pill{font:600 .72rem var(--font-body);border-radius:999px;padding:1px 9px;border:1.5px solid var(--muted);color:var(--muted)}
+.pill.aprendiendo{border-color:var(--accent);color:var(--accent)}
+.pill.oxidado{border-color:var(--warn);color:var(--warn);border-style:dashed}
+.pill.dominado{border-color:var(--ok);color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,transparent)}
+.detail{padding:0 16px 16px;border-top:1px solid var(--line)}
+.label{font:500 .72rem var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:16px 0 4px}
+.learn{font-weight:600}
+pre{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow-x:auto;font-size:.82rem;line-height:1.5;margin:6px 0}
+.file{font:.75rem var(--font-mono);color:var(--muted)}
+textarea{width:100%;min-height:64px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;resize:vertical}
+.opt{display:block;width:100%;text-align:left;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px 12px;margin:6px 0;font:inherit;cursor:pointer}
+.opt:hover:enabled{border-color:var(--accent)}
+.opt.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
+.opt.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)}
+.why{border-left:3px solid var(--accent);padding:2px 12px;margin-top:10px}
+.group{margin:22px 0 8px;color:var(--muted);font-size:.85rem}
+.group b{color:var(--ink)}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+td,th{text-align:left;padding:9px 8px;border-top:1px solid var(--line);vertical-align:top}
+th{font:500 .72rem var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-top:0}
+.scroll{overflow-x:auto}
+footer{margin-top:56px;color:var(--muted);font-size:.85rem}
+@media (prefers-reduced-motion:no-preference){.btn,.chip,.opt{transition:border-color .15s,background .15s}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#inicio">Learn by <span>Doing</span></a>
+    <nav class="main" id="nav" aria-label="Secciones"></nav>
+  </header>
+  <div id="toast"></div>
+  <main id="view"></main>
+  <footer>Learn by Doing es un plugin de código abierto para Claude Code. Tus lecciones y tu progreso son privados.</footer>
+</div>
+
+<script>
+const INTERVALS=[1,3,7,16,35], DAY=864e5;
+const TYPE_LABEL={concepto:'Concepto',decision:'Decisión',riesgo:'Riesgo',lectura:'Lectura'};
+const STATE_LABEL={nuevo:'Nuevo',aprendiendo:'Aprendiendo',oxidado:'Oxidado',dominado:'Dominado'};
+const STATE_COLOR={nuevo:'var(--line)',aprendiendo:'var(--accent)',oxidado:'var(--warn)',dominado:'var(--ok)'};
+const S={lessons:[],apps:[],progress:{},db:null,uid:null,loaded:false,slow:false,noDb:false,
+  open:null,guess:{},revealed:{},answered:{},toast:'',filters:{project:'todos',area:'todas',state:'todos'}};
+
+function h(tag,attrs,...kids){
+  const el=document.createElement(tag);
+  for(const [k,v] of Object.entries(attrs||{})){
+    if(k==='class')el.className=v;
+    else if(k.startsWith('on'))el.addEventListener(k.slice(2),v);
+    else if(v!==false&&v!=null)el.setAttribute(k,v);
+  }
+  for(const kid of kids.flat())if(kid!=null&&kid!==false)el.append(kid.nodeType?kid:document.createTextNode(String(kid)));
+  return el;
+}
+function stateOf(l){
+  const p=S.progress[l.id];
+  if(!p||!p.done)return 'nuevo';
+  if(p.due<=Date.now())return 'oxidado';
+  return p.box>=3?'dominado':'aprendiendo';
+}
+async function record(l,correct){
+  const prev=S.progress[l.id]||{box:0};
+  const box=correct?Math.min((prev.box||0)+1,INTERVALS.length-1):0;
+  const p={box,done:true,due:Date.now()+INTERVALS[box]*DAY,updatedAt:Date.now()};
+  S.progress[l.id]=p;
+  if(S.db&&S.uid){
+    try{await S.db.collection('data/users/'+S.uid).doc('p_'+l.id).set(p);}
+    catch(e){S.toast='No se pudo guardar tu progreso. Vuelve a intentarlo en un momento.';paintToast();}
+  }
+}
+const sorted=()=>[...S.lessons].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+const projectsOf=()=>{const m={};S.lessons.forEach(l=>{(m[l.project]=m[l.project]||{name:l.projectName||l.project,lessons:[]}).lessons.push(l)});return m;};
+const appearancesOf=(l)=>{const set=new Set([l.project]);S.apps.filter(a=>a.concept===l.id).forEach(a=>set.add(a.project));return set.size;};
+
+/* ---------- lesson pieces ---------- */
+function tags(l){
+  return h('div',{class:'tags'},
+    h('span',{class:'tag'},l.projectName||l.project),
+    h('span',{class:'tag'},TYPE_LABEL[l.type]||l.type),
+    h('span',{class:'tag'},l.area),
+    l.commit&&l.commit.hash?h('span',{class:'tag'},l.commit.hash):null,
+    l.example?h('span',{class:'tag'},'ejemplo'):null,
+    h('span',{class:'pill '+stateOf(l)},STATE_LABEL[stateOf(l)]));
+}
+function codeBlock(l){
+  return h('div',{},l.code.file?h('div',{class:'file'},l.code.file):null,h('pre',{},h('code',{},l.code.text)));
+}
+function contextBlock(l){
+  const x=l.context;if(!x)return null;
+  return h('div',{},
+    h('div',{class:'label'},'Qué se estaba construyendo'),h('div',{},x.building),
+    h('div',{class:'label'},'Qué vas a aprender'),h('div',{class:'learn'},x.learning));
+}
+function quiz(l,after){
+  const wrap=h('div');
+  wrap.append(h('div',{},l.check.question));
+  const result=h('div');
+  const buttons=[];
+  let done=false;
+  l.check.options.forEach((text,i)=>{
+    const b=h('button',{class:'opt',type:'button',onclick:async()=>{
+      if(done)return;done=true;
+      const ok=i===l.check.answer;
+      b.classList.add(ok?'ok':'bad');
+      if(!ok)buttons[l.check.answer].classList.add('ok');
+      result.append(h('div',{class:'why'},(ok?'Correcto. ':'Todavía no. ')+l.check.why));
+      await record(l,ok);
+      result.append(h('button',{class:'btn',type:'button',style:'margin-top:10px',onclick:after},'Continuar'));
+    }},text);
+    buttons.push(b);wrap.append(b);
+  });
+  wrap.append(result);
+  return wrap;
+}
+function fullLesson(l){
+  const box=h('div',{class:'detail'});
+  box.append(contextBlock(l)||'');
+  box.append(h('div',{class:'label'},'El código'));
+  if(l.context)box.append(h('div',{class:'file'},l.context.snippetRole));
+  box.append(codeBlock(l));
+  box.append(h('div',{class:'label'},'Antes de leer, predice'),h('div',{},l.predict));
+  const ta=h('textarea',{id:'guess-'+l.id,placeholder:'Escribe tu predicción',oninput:(e)=>{S.guess[l.id]=e.target.value}});
+  ta.value=S.guess[l.id]||'';
+  box.append(ta);
+  if(!S.revealed[l.id]){
+    box.append(h('button',{class:'btn primary',type:'button',style:'margin-top:8px',onclick:()=>{S.revealed[l.id]=true;render();}},'Ver la explicación'));
+  }else{
+    box.append(h('div',{class:'label'},'El concepto'),h('div',{},l.explain),
+      h('div',{class:'label'},'Reto'),h('div',{},l.challenge),
+      h('div',{class:'label'},'Comprobación'),quiz(l,()=>{render();}));
+    if(l.related&&l.related.length)box.append(h('div',{class:'label'},'Relacionado'),h('div',{class:'tags'},l.related.map(r=>h('span',{class:'tag'},r))));
+  }
+  return box;
+}
+function lessonItem(l){
+  const open=S.open===l.id;
+  const item=h('article',{class:'lesson'});
+  item.append(h('button',{class:'head',type:'button','aria-expanded':String(open),onclick:()=>{S.open=open?null:l.id;render();}},tags(l),h('h3',{},l.title)));
+  if(open)item.append(fullLesson(l));
+  return item;
+}
+
+/* ---------- views ---------- */
+function emptyState(){
+  if(S.noDb)return h('div',{class:'empty'},h('b',{},'Este espacio necesita almacenamiento'),'Ábrelo desde claude.ai con tu cuenta para ver tus lecciones y guardar tu progreso.');
+  if(!S.loaded)return h('div',{class:'empty'},h('b',{},S.slow?'Tarda más de lo normal':'Cargando tus lecciones'),S.slow?'No se pudo contactar con el almacén todavía. Si la conexión vuelve, esto se actualiza solo.':'');
+  return h('div',{class:'empty'},h('b',{},'Aún no tienes lecciones'),
+    'Pide a Claude un commit en cualquier proyecto con el plugin instalado, o ejecuta /learn-from-history en un repo existente. Después ejecuta /study para traer las lecciones aquí.');
+}
+function installBlock(){
+  const cmd=(t)=>{
+    const code=h('code',{},t);
+    const btn=h('button',{class:'btn',type:'button',onclick:async()=>{
+      try{await navigator.clipboard.writeText(t);btn.textContent='Copiado';}
+      catch(e){const r=document.createRange();r.selectNodeContents(code);const s=getSelection();s.removeAllRanges();s.addRange(r);btn.textContent='Selecciónalo y copia';}
+      setTimeout(()=>{btn.textContent='Copiar'},1800);
+    }},'Copiar');
+    return h('div',{class:'cmd'},code,btn);
+  };
+  return h('section',{class:'block',id:'instalar'},
+    h('h2',{},'Instalación'),
+    h('p',{class:'sub'},'Necesitas Claude Code, Node 18 o superior y git.'),
+    h('div',{class:'panel'},
+      h('h3',{},'En Claude Code'),
+      cmd('/plugin marketplace add joshrubio/learn-by-doing'),
+      cmd('/plugin install learn-by-doing@learn-by-doing'),
+      h('p',{class:'note'},'Reinicia la sesión después de instalar. Pide a Claude que haga un commit y el plugin guardará las lecciones sin interrumpirte.'),
+      h('h3',{style:'margin-top:16px'},'Para abrir este espacio'),
+      cmd('/study'),
+      h('p',{class:'note'},'Sincroniza las lecciones nuevas y abre este Artifact. La primera vez lo crea en tu cuenta. Los fragmentos de código se suben a ese Artifact privado.'),
+      h('h3',{style:'margin-top:16px'},'Para tus repos anteriores'),
+      cmd('/learn-from-history ruta/al/repo 8'),
+      h('p',{class:'note'},'Elige los commits más instructivos del historial y los convierte en lecciones. Te pide confirmación antes de gastar nada.')));
+}
+function howItWorks(){
+  const steps=[
+    ['Trabaja con Claude','Pídele commits como siempre. El plugin detecta cada uno.'],
+    ['Se guardan lecciones','De 1 a 3 por commit, sobre el código que se escribió de verdad y el porqué.'],
+    ['Ejecuta /study','Sincroniza lo nuevo con este espacio y lo abre.'],
+    ['Estudia','Predice, lee, practica y repasa lo que se oxida.']];
+  return h('section',{class:'block'},h('h2',{},'Cómo funciona'),h('p',{class:'sub'},'Aprendes después de construir, no en medio.'),
+    h('ol',{class:'steps'},steps.map(([t,d])=>h('li',{},h('b',{},t),h('span',{},d)))));
+}
+function dashboard(){
+  const total=S.lessons.length;
+  const counts={nuevo:0,aprendiendo:0,oxidado:0,dominado:0};
+  S.lessons.forEach(l=>counts[stateOf(l)]++);
+  const root=h('section',{class:'block'});
+  root.append(h('h2',{},'Tu progreso'));
+  if(!total){root.append(emptyState());return root;}
+  root.append(h('div',{class:'stats'},
+    [[total,'lecciones'],[counts.nuevo,'por estudiar'],[counts.oxidado,'para repasar'],[counts.dominado,'dominadas']].map(([n,t])=>h('div',{class:'stat'},h('b',{},String(n)),h('span',{},t)))));
+  const next=h('div',{class:'panel next'},h('h3',{},'Siguiente paso'));
+  const due=sorted().filter(l=>stateOf(l)==='oxidado');
+  const fresh=sorted().filter(l=>stateOf(l)==='nuevo');
+  if(due.length){next.append(h('p',{},`${due.length} ${due.length===1?'concepto se ha oxidado':'conceptos se han oxidado'}. Un repaso corto los devuelve a la memoria.`),h('a',{class:'btn primary',href:'#repaso'},'Repasar ahora'));}
+  else if(fresh.length){next.append(h('p',{},`Empieza por: ${fresh[0].title}`),h('a',{class:'btn primary',href:'#lecciones',onclick:()=>{S.open=fresh[0].id}},'Abrir lección'));}
+  else next.append(h('p',{},'Estás al día. Haz otro commit con Claude y vuelve cuando haya lecciones nuevas.'));
+  const projs=Object.entries(projectsOf());
+  const byProject=h('div',{class:'panel'},h('h3',{},'Por proyecto'));
+  projs.forEach(([slug,p])=>{
+    const c={nuevo:0,aprendiendo:0,oxidado:0,dominado:0};p.lessons.forEach(l=>c[stateOf(l)]++);
+    byProject.append(h('div',{class:'row'},h('span',{},p.name),h('span',{class:'mono'},`${c.dominado}/${p.lessons.length}`)),
+      h('div',{class:'bar',role:'img','aria-label':`${p.name}: ${c.dominado} de ${p.lessons.length} dominadas`},Object.keys(c).map(k=>h('i',{style:`width:${c[k]/p.lessons.length*100}%;background:${STATE_COLOR[k]}`}))));
+  });
+  const recent=h('div',{class:'panel'},h('h3',{},'Lecciones recientes'),
+    h('ul',{class:'recent'},sorted().slice(0,5).map(l=>h('li',{},h('a',{href:'#lecciones',onclick:()=>{S.open=l.id}},h('span',{},l.title),h('small',{},l.projectName||l.project))))));
+  root.append(h('div',{class:'grid2'},next,byProject),h('div',{style:'margin-top:14px'},recent));
+  return root;
+}
+function viewInicio(){
+  const root=h('div');
+  root.append(h('section',{class:'hero'},
+    h('div',{class:'eyebrow'},'Plugin para Claude Code'),
+    h('h1',{},'Aprende el código que tu IA ya escribió'),
+    h('p',{class:'lead'},'Cada vez que Claude hace un commit, Learn by Doing guarda lecciones cortas sobre ese código real: qué se construía, qué concepto había detrás y cómo comprobarlo. Estudias con calma, cuando quieras, y el espacio recuerda lo que ya sabes entre todos tus proyectos.'),
+    h('div',{class:'cta'},h('a',{class:'btn primary',href:'#lecciones'},'Ver mis lecciones'),h('a',{class:'btn',href:'#instalar'},'Cómo instalarlo'))));
+  root.append(dashboard(),howItWorks(),installBlock());
+  return root;
+}
+function filterBar(){
+  const projs=projectsOf();
+  const sel=h('select',{id:'f-project','aria-label':'Proyecto',onchange:(e)=>{S.filters.project=e.target.value;render();}},
+    h('option',{value:'todos'},'Todos los proyectos'),Object.entries(projs).map(([s,p])=>h('option',{value:s},p.name)));
+  sel.value=S.filters.project;
+  const areas=['todas',...new Set(S.lessons.map(l=>l.area))];
+  const states=['todos','nuevo','aprendiendo','oxidado','dominado'];
+  return h('div',{},
+    h('div',{class:'filters'},sel,areas.map(a=>h('button',{class:'chip',type:'button','aria-pressed':String(S.filters.area===a),onclick:()=>{S.filters.area=a;render();}},a))),
+    h('div',{class:'filters'},states.map(s=>h('button',{class:'chip',type:'button','aria-pressed':String(S.filters.state===s),onclick:()=>{S.filters.state=s;render();}},s==='todos'?'todos los estados':STATE_LABEL[s]))));
+}
+const filtered=()=>sorted().filter(l=>(S.filters.project==='todos'||l.project===S.filters.project)&&(S.filters.area==='todas'||l.area===S.filters.area)&&(S.filters.state==='todos'||stateOf(l)===S.filters.state));
+function viewLecciones(){
+  const root=h('div',{style:'padding-top:12px'});
+  root.append(h('h2',{},'Lecciones'),h('p',{class:'sub'},'Agrupadas por proyecto y commit.'));
+  if(!S.lessons.length){root.append(emptyState());return root;}
+  root.append(filterBar());
+  const list=filtered();
+  if(!list.length){root.append(h('div',{class:'empty'},h('b',{},'Nada con esos filtros'),'Cambia el proyecto, el área o el estado.'));return root;}
+  let last='';
+  list.forEach(l=>{
+    const key=(l.projectName||l.project)+'|'+(l.commit&&l.commit.hash);
+    if(key!==last){last=key;root.append(h('div',{class:'group'},h('b',{},l.projectName||l.project),' · ',(l.commit&&l.commit.hash)||'sin commit',' · ',(l.commit&&l.commit.message)||''));}
+    root.append(lessonItem(l));
+  });
+  return root;
+}
+function viewRepaso(){
+  const root=h('div',{style:'padding-top:12px'});
+  root.append(h('h2',{},'Repaso'),h('p',{class:'sub'},'Conceptos que llevan tiempo sin verse. Una pregunta basta para recordarlos.'));
+  const due=sorted().filter(l=>stateOf(l)==='oxidado');
+  if(!due.length){root.append(h('div',{class:'empty'},h('b',{},'Nada que repasar ahora'),'Los conceptos aparecen aquí cuando les toca. Después de la primera comprobación, el primer repaso llega al día siguiente.'));return root;}
+  due.forEach(l=>{
+    root.append(h('article',{class:'lesson'},h('div',{class:'detail',style:'border-top:0;padding-top:14px'},tags(l),h('h3',{},l.title),contextBlock(l),h('div',{class:'label'},'El código'),codeBlock(l),h('div',{class:'label'},'Comprobación'),quiz(l,()=>{render();}))));
+  });
+  return root;
+}
+function viewConceptos(){
+  const root=h('div',{style:'padding-top:12px'});
+  root.append(h('h2',{},'Conceptos'),h('p',{class:'sub'},'Todo lo que has visto, sin importar el proyecto. El estado de cada concepto es global.'));
+  if(!S.lessons.length){root.append(emptyState());return root;}
+  const rows=[...S.lessons].sort((a,b)=>a.area.localeCompare(b.area)||a.id.localeCompare(b.id));
+  root.append(h('div',{class:'scroll'},h('table',{},
+    h('thead',{},h('tr',{},['Concepto','Área','Estado','Proyectos'].map(t=>h('th',{},t)))),
+    h('tbody',{},rows.map(l=>h('tr',{},
+      h('td',{},h('a',{href:'#lecciones',onclick:()=>{S.open=l.id;S.filters={project:'todos',area:'todas',state:'todos'}}},l.title),h('div',{class:'file'},l.id)),
+      h('td',{},l.area),h('td',{},h('span',{class:'pill '+stateOf(l)},STATE_LABEL[stateOf(l)])),h('td',{class:'mono'},String(appearancesOf(l)))))))));
+  return root;
+}
+
+/* ---------- shell ---------- */
+const VIEWS={inicio:viewInicio,lecciones:viewLecciones,repaso:viewRepaso,conceptos:viewConceptos};
+function route(){
+  const hash=(location.hash||'').slice(1);
+  if(hash==='instalar')return 'inicio';
+  return VIEWS[hash]?hash:'inicio';
+}
+function paintToast(){const t=document.getElementById('toast');t.replaceChildren(S.toast?h('div',{class:'toast',role:'alert'},S.toast):'');}
+function render(){
+  const cur=route();
+  const due=S.lessons.filter(l=>stateOf(l)==='oxidado').length;
+  const nav=document.getElementById('nav');
+  nav.replaceChildren(...[['inicio','Inicio',null],['lecciones','Lecciones',null],['repaso','Repaso',due||null],['conceptos','Conceptos',null]].map(([id,label,n])=>
+    h('a',{href:'#'+id,'aria-current':cur===id?'page':null},label,n?h('span',{class:'n'},String(n)):null)));
+  document.getElementById('view').replaceChildren(VIEWS[cur]());
+  paintToast();
+}
+window.addEventListener('hashchange',()=>{render();if(location.hash==='#instalar'){const e=document.getElementById('instalar');if(e)e.scrollIntoView();}});
+
+async function boot(){
+  render();
+  const claude=window.claude;
+  if(!claude||!claude.use){S.noDb=true;render();return;}
+  const [db,user]=await Promise.all([claude.use('db'),claude.use('user')]);
+  if(!db){S.noDb=true;render();return;}
+  S.db=db;
+  S.uid=user?await user.id():null;
+  const timer=setTimeout(()=>{S.slow=true;render();},10000);
+  const fail=()=>{clearTimeout(timer);S.slow=true;render();};
+  db.collection('lessons').onSnapshot((snap)=>{
+    clearTimeout(timer);S.slow=false;S.loaded=true;
+    S.lessons=snap.docs.map(d=>({...d.data(),id:d.id}));render();
+  },fail);
+  db.collection('appearances').onSnapshot((snap)=>{S.apps=snap.docs.map(d=>d.data());render();},()=>{});
+  if(S.uid){
+    db.collection('data/users/'+S.uid).onSnapshot((snap)=>{
+      const p={};snap.docs.forEach(d=>{if(d.id.startsWith('p_'))p[d.id.slice(2)]=d.data();});
+      S.progress=p;render();
+    },()=>{});
+  }
+}
+boot();
+</script>
