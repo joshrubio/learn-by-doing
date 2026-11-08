@@ -3,8 +3,10 @@ const fs = require('fs');
 const path = require('path');
 const S = require('./shared');
 const N = require('./notes');
+const D = require('./detect');
 
-const { MODALITIES } = S;
+const { MODALITIES, KINDS, SCOPES } = S;
+const TOOLING = new Set(['vite', 'tailwind', 'prisma', 'vitest', 'jest', 'playwright', 'pytest', 'tokio']);
 const TYPES = ['concepto', 'decision', 'riesgo', 'lectura'];
 const AREAS = ['frontend', 'backend', 'base-de-datos', 'tests', 'config', 'codigo', 'docs', 'otros'];
 const MAX_PER_COMMIT = 4;
@@ -50,6 +52,8 @@ function validate(l, i) {
   const errs = [];
   if (!TYPES.includes(l.type)) errs.push(`type must be one of ${TYPES.join(', ')}`);
   if (!AREAS.includes(l.area)) errs.push(`area must be one of ${AREAS.join(', ')}`);
+  if (!SCOPES.includes(l.scope)) errs.push(`scope must be one of ${SCOPES.join(', ')} (universal: any language; lenguaje: tied to a language; framework: tied to a framework; tipo: tied to the kind of project)`);
+  for (const k of ['languages', 'frameworks']) if (l[k] !== undefined && !(Array.isArray(l[k]) && l[k].every(str))) errs.push(`${k} must be a list of strings`);
   if (!str(l.concept) || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(l.concept)) errs.push('concept must be a kebab-case slug');
   for (const k of ['title', 'predict', 'explain']) if (!str(l[k])) errs.push(`${k} is required`);
   const x = l.context;
@@ -81,6 +85,34 @@ function validateExercise(e) {
   return errs;
 }
 
+/* Detection is cached in the repo's state for a day. */
+function detection(state, slug, dir) {
+  const p = state.projects[slug] || {};
+  if (p.detected && p.detected.detectedAt && Date.now() - Date.parse(p.detected.detectedAt) < 86400000) return p.detected;
+  const det = D.detect(dir);
+  state.projects[slug] = { ...p, detected: det };
+  return det;
+}
+
+/* Tags come from the package the lesson's code belongs to, not from the model. */
+function tagsFor(l, det, kindOverride, repoDir) {
+  const pkg = D.packageFor(det, l.code && l.code.file, repoDir);
+  const fileLang = D.languageOfFile((l.code && l.code.file) || '');
+  const known = {
+    languages: new Set([...det.languages, ...pkg.languages, fileLang].filter(Boolean)),
+    frameworks: new Set([...det.frameworks, ...pkg.frameworks]),
+  };
+  const errs = [];
+  for (const [k, set] of Object.entries(known)) {
+    for (const v of l[k] || []) if (!set.has(v)) errs.push(`${k} "${v}" was not detected in this repo. Detected: ${[...set].join(', ') || 'none'}. Leave ${k} out to fill it automatically`);
+  }
+  const languages = l.languages && l.languages.length ? l.languages : (fileLang ? [fileLang] : pkg.languages.slice(0, 1));
+  const frameworks = l.frameworks && l.frameworks.length ? l.frameworks : (l.scope === 'framework' ? pkg.frameworks.filter((f) => !TOOLING.has(f)) : []);
+  if (l.scope === 'lenguaje' && !languages.length) errs.push('scope "lenguaje" needs a language and none was detected, use "universal"');
+  if (l.scope === 'framework' && !frameworks.length) errs.push('scope "framework" needs a framework and none was detected in this package, use "lenguaje" or "universal"');
+  return { kind: kindOverride || pkg.kind, languages, frameworks, errs };
+}
+
 function cleanExercise(e) {
   const out = { modality: e.modality, prompt: e.prompt };
   if (e.code) out.code = { file: (e.code.file || '').toString(), text: e.code.text };
@@ -106,11 +138,17 @@ async function add() {
   const now = new Date().toISOString();
   state.projects[proj.slug] = { ...known, name: proj.name, path: proj.dir, remote: proj.remote, firstSeen: known.firstSeen || now, lastSeen: now };
 
+  const det = detection(state, proj.slug, project);
+  const kindOverride = state.projects[proj.slug].kindOverride;
+  const tagged = lessons.map((l) => tagsFor(l, det, kindOverride, project));
+  const tagProblems = tagged.map((t, i) => (t.errs.length ? `lesson ${i + 1}: ${t.errs.join('; ')}` : null)).filter(Boolean);
+  if (tagProblems.length) fail(tagProblems.join('\n'));
+
   const commit = input.commit || {};
   const dir = S.lessonsDir();
   fs.mkdirSync(dir, { recursive: true });
   let added = 0, repeated = 0;
-  for (const l of lessons) {
+  for (const [i, l] of lessons.entries()) {
     const file = path.join(dir, `${l.concept}.md`);
     if (fs.existsSync(file)) {
       const text = fs.readFileSync(file, 'utf8');
@@ -125,6 +163,7 @@ async function add() {
     fs.writeFileSync(file, N.lessonToMarkdown({
       id: l.concept, createdAt: now, project: proj.slug, projectName: proj.name,
       commit: { hash: commit.hash || '', message: commit.message || '', date: commit.date || '' },
+      scope: l.scope, kind: tagged[i].kind, languages: tagged[i].languages, frameworks: tagged[i].frameworks,
       context: l.context, type: l.type, area: l.area, title: l.title, code: { file: (l.code.file || '').toString(), text: l.code.text },
       predict: l.predict, explain: l.explain, exercise: cleanExercise(l.exercise),
       related: Array.isArray(l.related) ? l.related.filter(str) : [], appearances: [], example: l.example === true,
@@ -146,13 +185,24 @@ function repo() {
   const proj = S.identify(project);
   const state = S.readState();
   const now = new Date().toISOString();
+  const kind = flag('kind');
+  if (kind !== undefined && !KINDS.includes(kind)) fail(`kind must be one of ${KINDS.join(', ')}`);
   if (action === 'enable' || action === 'disable') {
     const known = state.projects[proj.slug] || {};
     state.projects[proj.slug] = { ...known, name: proj.name, path: proj.dir, remote: proj.remote, firstSeen: known.firstSeen || now, lastSeen: now, learn: action === 'enable' };
+    if (kind) state.projects[proj.slug].kindOverride = kind;
+    if (action === 'enable') detection(state, proj.slug, project);
     S.writeState(state);
-  } else if (action !== 'status') fail('usage: repo status|enable|disable [--project dir]');
+  } else if (action !== 'status') fail('usage: repo status|enable|disable [--project dir] [--kind <kind>]');
   const entry = state.projects[proj.slug];
-  console.log(JSON.stringify({ project: proj.slug, name: proj.name, learn: entry && typeof entry.learn === 'boolean' ? entry.learn : null }));
+  const det = entry && entry.detected;
+  console.log(JSON.stringify({
+    project: proj.slug, name: proj.name,
+    learn: entry && typeof entry.learn === 'boolean' ? entry.learn : null,
+    kind: entry ? entry.kindOverride || (det && det.kind) || null : null,
+    kindSource: entry && entry.kindOverride ? 'user' : 'detected',
+    languages: det ? det.languages : [], frameworks: det ? det.frameworks : [],
+  }));
 }
 
 function status() {

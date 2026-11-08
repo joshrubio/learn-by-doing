@@ -49,6 +49,21 @@ The type is about the content. Choose it from what the commit contains, not one 
 | `riesgo` | a bug, security issue or edge case |
 | `lectura` | how to follow the flow from input to output |
 
+## Scope and project kind
+
+The hook message gives the project kind (app, libreria, plugin, mcp, integracion, script, infraestructura or otro), its languages and frameworks, and what to favor for that kind. Use it to choose and weigh lessons:
+- In an **app**, architecture inside the framework, design patterns, data flow and infrastructure weigh most.
+- In a **plugin**, an **mcp** or an **integracion**, the contract with the other side (manifest, tool schemas, protocol, authentication, error handling) weighs most and the language is secondary. Write a lesson about the language only when it is essential to understand the code.
+- In a **libreria**, public API design and testing. In a **script**, language fundamentals. In **infraestructura**, configuration, environments and secrets.
+
+Every lesson needs a `scope`, which says where the concept lives:
+- `universal`: true in any language or framework (separation of concerns, validation, error handling).
+- `lenguaje`: tied to a language (async/await in JavaScript, borrowing in Rust).
+- `framework`: tied to a framework (React hooks, Express middleware).
+- `tipo`: tied to the kind of project (a plugin manifest, an MCP tool schema).
+
+Do not write languages, frameworks or the project kind yourself. The tool derives them from the package the lesson's `code.file` belongs to, so names never drift. If you do set `languages` or `frameworks`, they must come from the lists in the hook message. In a monorepo, choose `code.file` from the package the lesson is about.
+
 ## Every lesson has the same spine
 
 Context, predict, concept, one exercise, result. The only part that varies is the exercise, and there is exactly one per lesson.
@@ -105,6 +120,7 @@ Call the `save_lessons` tool of the learn-by-doing MCP server. Never use shell c
       "type": "decision",
       "area": "backend",
       "concept": "separation-of-concerns",
+      "scope": "universal",
       "title": "Why the route does not talk to the database directly",
       "context": {
         "building": "A login endpoint so users can sign in with email and password.",

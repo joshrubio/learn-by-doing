@@ -12,7 +12,7 @@ try { version = require('../.claude-plugin/plugin.json').version; } catch {}
 const TOOLS = [
   {
     name: 'save_lessons',
-    description: 'Save the lessons of one commit as notes. Only for repos the user turned on. If a lesson is invalid the tool returns the reason, fix it and call again. Lesson fields are described in the learn-by-doing skill.',
+    description: 'Save the lessons of one commit as notes. Only for repos the user turned on. Every lesson needs a scope (universal, lenguaje, framework or tipo); languages, frameworks and the project kind are filled in automatically. If a lesson is invalid the tool returns the reason, fix it and call again. Lesson fields are described in the learn-by-doing skill.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -37,7 +37,11 @@ const TOOLS = [
     description: 'Record the user\'s decision about learning from a repo. Call it only after the user answered the question.',
     inputSchema: {
       type: 'object',
-      properties: { project: { type: 'string', description: 'Absolute path of the repository' }, enabled: { type: 'boolean' } },
+      properties: {
+        project: { type: 'string', description: 'Absolute path of the repository' },
+        enabled: { type: 'boolean' },
+        kind: { type: 'string', enum: ['app', 'libreria', 'plugin', 'mcp', 'integracion', 'script', 'infraestructura', 'otro'], description: 'Only when the user corrected the detected kind of project' },
+      },
       required: ['project', 'enabled'],
     },
   },
@@ -57,7 +61,7 @@ function call(name, a) {
   if (name === 'list_concepts') return run(['list']);
   if (name === 'set_repo') {
     if (!a || typeof a.project !== 'string' || typeof a.enabled !== 'boolean') return { text: 'project and enabled are required', isError: true };
-    return run(['repo', a.enabled ? 'enable' : 'disable', '--project', a.project]);
+    return run(['repo', a.enabled ? 'enable' : 'disable', '--project', a.project, ...(a.kind ? ['--kind', String(a.kind)] : [])]);
   }
   return { text: `unknown tool ${name}`, isError: true };
 }

@@ -158,6 +158,9 @@ const INTERVALS=[1,3,7,16,35], DAY=864e5;
 const TYPE_LABEL={concepto:'Concepto',decision:'Decisión',riesgo:'Riesgo',lectura:'Lectura'};
 const STATE_LABEL={nuevo:'Nuevo',aprendiendo:'Aprendiendo',oxidado:'Oxidado',dominado:'Dominado'};
 const STATE_COLOR={nuevo:'var(--line)',aprendiendo:'var(--accent)',oxidado:'var(--warn)',dominado:'var(--ok)'};
+const KIND_LABEL={app:'App',libreria:'Librería',plugin:'Plugin',mcp:'MCP',integracion:'Integración',script:'Script',infraestructura:'Infraestructura',otro:'Otro'};
+const SCOPE_LABEL={universal:'Universal',lenguaje:'Lenguaje',framework:'Framework',tipo:'Del tipo de proyecto'};
+const scopeText=(l)=>{const s=SCOPE_LABEL[l.scope]||'';const x=l.scope==='framework'?(l.frameworks||[]):l.scope==='lenguaje'?(l.languages||[]):[];return x.length?s+': '+x.join(', '):s;};
 const FAMILIES={recordar:'Recordar',explicar:'Explicar',leer:'Leer código'};
 const FAMILY_DESC={recordar:'Retener y distinguir lo que has visto.',explicar:'Razonar con tus palabras. Claude corrige tu respuesta.',leer:'Entender y revisar código que escribió la IA. Nunca tienes que escribir código.'};
 const MODALITIES={
@@ -190,7 +193,7 @@ const LEVEL_KEYS=['Cada pieza tiene una responsabilidad','Se puede cambiar una s
 
 const S={lessons:[],apps:[],progress:{},profile:null,db:null,sample:null,uid:null,loaded:false,progressLoaded:false,slow:false,noDb:false,
   open:null,guess:{},revealed:{},ex:{},toast:'',reviewIds:null,
-  filters:{project:'todos',area:'todas',state:'todos'},
+  filters:{project:'todos',area:'todas',state:'todos',kind:'todos',lang:'todos'},
   draft:null,diag:{},levelAns:'',levelRes:null,levelBusy:false,reco:null,saved:false,editing:false,skipSetup:false};
 
 function h(tag,attrs,...kids){
@@ -336,10 +339,13 @@ function tags(l){
   const e=exerciseOf(l);
   return h('div',{class:'tags'},
     h('span',{class:'tag'},l.projectName||l.project),
+    l.kind?h('span',{class:'tag'},KIND_LABEL[l.kind]||l.kind):null,
+    (l.languages||[]).slice(0,2).map(x=>h('span',{class:'tag'},x)),
+    (l.frameworks||[]).slice(0,2).map(x=>h('span',{class:'tag'},x)),
     h('span',{class:'tag'},TYPE_LABEL[l.type]||l.type),
+    l.scope?h('span',{class:'tag'},SCOPE_LABEL[l.scope]||l.scope):null,
     h('span',{class:'tag'},l.area),
     e&&MODALITIES[e.modality]?h('span',{class:'tag'},MODALITIES[e.modality].label):null,
-    l.commit&&l.commit.hash?h('span',{class:'tag'},l.commit.hash):null,
     l.example?h('span',{class:'tag'},'ejemplo'):null,
     h('span',{class:'pill '+stateOf(l)},STATE_LABEL[stateOf(l)]));
 }
@@ -463,11 +469,15 @@ function filterBar(){
   sel.value=S.filters.project;
   const areas=['todas',...new Set(S.lessons.map(l=>l.area))];
   const states=['todos','nuevo','aprendiendo','oxidado','dominado'];
+  const mkSel=(id,label,allLabel,values,key,fmt)=>{const s=h('select',{id,'aria-label':label,onchange:(ev)=>{S.filters[key]=ev.target.value;render();}},h('option',{value:'todos'},allLabel),values.map(v=>h('option',{value:v},fmt(v))));s.value=S.filters[key];return s;};
+  const kindSel=mkSel('f-kind','Tipo de proyecto','Todos los tipos',[...new Set(S.lessons.map(l=>l.kind).filter(Boolean))],'kind',v=>KIND_LABEL[v]||v);
+  const langSel=mkSel('f-lang','Lenguaje','Todos los lenguajes',[...new Set(S.lessons.flatMap(l=>l.languages||[]))].sort(),'lang',v=>v);
   return h('div',{},
-    h('div',{class:'filters'},sel,areas.map(a=>h('button',{class:'chip',type:'button','aria-pressed':String(S.filters.area===a),onclick:()=>{S.filters.area=a;render();}},a))),
+    h('div',{class:'filters'},sel,kindSel,langSel),
+    h('div',{class:'filters'},areas.map(a=>h('button',{class:'chip',type:'button','aria-pressed':String(S.filters.area===a),onclick:()=>{S.filters.area=a;render();}},a))),
     h('div',{class:'filters'},states.map(s=>h('button',{class:'chip',type:'button','aria-pressed':String(S.filters.state===s),onclick:()=>{S.filters.state=s;render();}},s==='todos'?'todos los estados':STATE_LABEL[s]))));
 }
-const filtered=()=>sorted().filter(l=>l.id===S.open||((S.filters.project==='todos'||l.project===S.filters.project)&&(S.filters.area==='todas'||l.area===S.filters.area)&&(S.filters.state==='todos'||stateOf(l)===S.filters.state)));
+const filtered=()=>sorted().filter(l=>l.id===S.open||((S.filters.project==='todos'||l.project===S.filters.project)&&(S.filters.area==='todas'||l.area===S.filters.area)&&(S.filters.state==='todos'||stateOf(l)===S.filters.state)&&(S.filters.kind==='todos'||l.kind===S.filters.kind)&&(S.filters.lang==='todos'||(l.languages||[]).includes(S.filters.lang))));
 function viewLecciones(){
   const root=h('div',{style:'padding-top:12px'});
   root.append(h('h2',{},'Lecciones'),h('p',{class:'sub'},'Agrupadas por proyecto y commit.'));
@@ -501,10 +511,10 @@ function viewConceptos(){
   if(!S.lessons.length){root.append(emptyState());return root;}
   const rows=[...S.lessons].sort((a,b)=>a.area.localeCompare(b.area)||a.id.localeCompare(b.id));
   root.append(h('div',{class:'scroll'},h('table',{},
-    h('thead',{},h('tr',{},['Concepto','Área','Estado','Proyectos'].map(t=>h('th',{},t)))),
+    h('thead',{},h('tr',{},['Concepto','Ámbito','Área','Estado','Proyectos'].map(t=>h('th',{},t)))),
     h('tbody',{},rows.map(l=>h('tr',{},
-      h('td',{},h('a',{href:'#lecciones',onclick:()=>{S.open=l.id;S.filters={project:'todos',area:'todas',state:'todos'}}},l.title),h('div',{class:'file'},l.id)),
-      h('td',{},l.area),h('td',{},h('span',{class:'pill '+stateOf(l)},STATE_LABEL[stateOf(l)])),h('td',{class:'mono'},String(appearancesOf(l)))))))));
+      h('td',{},h('a',{href:'#lecciones',onclick:()=>{S.open=l.id;S.filters={project:'todos',area:'todas',state:'todos',kind:'todos',lang:'todos'}}},l.title),h('div',{class:'file'},l.id)),
+      h('td',{},scopeText(l)||'—'),h('td',{},l.area),h('td',{},h('span',{class:'pill '+stateOf(l)},STATE_LABEL[stateOf(l)])),h('td',{class:'mono'},String(appearancesOf(l)))))))));
   return root;
 }
 

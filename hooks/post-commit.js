@@ -2,9 +2,11 @@
 const fs = require('fs');
 const path = require('path');
 const shared = require(path.join(__dirname, '..', 'scripts', 'shared.js'));
+const detector = require(path.join(__dirname, '..', 'scripts', 'detect.js'));
 
 const COMMIT_CMD = /\bgit\s+(?:-C\s+\S+\s+|-c\s+\S+\s+)*commit\b/;
 const FRESH_SECONDS = 300;
+const DETECT_TTL_MS = 86400000;
 const AREAS = [
   ['tests', /(^|\/)(tests?|__tests__|spec|e2e)\/|\.(test|spec)\.[a-z]+$/i],
   ['base-de-datos', /(^|\/)(migrations?|prisma|db|database|schema)\/|\.sql$/i],
@@ -23,14 +25,29 @@ function areaOf(file) {
 
 const out = (context) => process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: context } }));
 const fwd = (p) => p.replace(/\\/g, '/');
+const list = (a) => (a && a.length ? a.join(', ') : 'none');
 
-function askMessage(proj, cwd, hash, message, lbd) {
+function detectedLine(det, kind, source) {
+  const lines = [`Project kind: ${kind} (${source}). Languages: ${list(det && det.languages)}. Frameworks: ${list(det && det.frameworks)}.`];
+  if (det && det.monorepo) {
+    lines.push('Monorepo packages: ' + det.packages.map((p) => `${p.path || '.'} (${p.kind}; ${list(p.languages)}; ${list(p.frameworks)})`).join(' | '));
+  }
+  return lines.join('\n');
+}
+
+function askMessage(proj, cwd, hash, message, det) {
+  const kind = (det && det.kind) || 'otro';
+  const why = det && det.reasons && det.reasons.length ? ` because ${det.reasons.join(', ')}` : '';
   return [
     `[learn-by-doing] A commit was just made in a repo the user has not decided about yet: ${proj.name} (${hash} "${message}").`,
+    `Detected: kind "${kind}"${why}. Languages: ${list(det && det.languages)}. Frameworks: ${list(det && det.frameworks)}.`,
     'Do not write any lessons yet. Ask the user once, in their language, with the AskUserQuestion tool:',
-    `"¿Quieres que Learn by Doing aprenda de los commits de ${proj.name}?" with two options: "Sí, en este repo" and "No, nunca aquí".`,
+    `"¿Quieres que Learn by Doing aprenda de los commits de ${proj.name}? Lo he detectado como: ${kind}." with three options: "Sí, en este repo (${kind})", "Sí, pero es otro tipo de proyecto", "No, nunca aquí".`,
     'Tell them in one sentence that lessons are generated from the code of each commit and, when they run /study, snippets are uploaded to their own private study space. If this repo belongs to an employer or client, they should check that this is allowed.',
-    `Then call the set_repo tool of the learn-by-doing MCP server with project "${fwd(cwd)}" and enabled true for the first option, false for the second.`,
+    `Then call the set_repo tool of the learn-by-doing MCP server with project "${fwd(cwd)}":`,
+    '- first option: enabled true, no kind (the detected one stays and keeps updating);',
+    '- second option: ask one more AskUserQuestion with the 3 or 4 most plausible other kinds for this repo, chosen from app, libreria, plugin, mcp, integracion, script, infraestructura, otro (the user can type another with "Other"), then enabled true and kind set to their answer;',
+    '- third option: enabled false.',
     `If they said yes, read this commit with: git -C "${fwd(cwd)}" show ${hash}   and continue as the learn-by-doing skill describes, saving the lessons now. If they said no, say nothing more about it.`,
   ].join('\n');
 }
@@ -62,10 +79,17 @@ function main(raw) {
   } catch { return; }
   if (!committedAt || Date.now() / 1000 - committedAt > FRESH_SECONDS) return;
   if (entry && entry.lastHash === full) return;
-  state.projects[proj.slug] = { ...(entry || {}), name: proj.name, path: proj.dir, remote: proj.remote, firstSeen: (entry && entry.firstSeen) || new Date().toISOString(), lastSeen: new Date().toISOString(), lastHash: full };
+
+  let det = entry && entry.detected && entry.detected.detectedAt && Date.now() - Date.parse(entry.detected.detectedAt) < DETECT_TTL_MS ? entry.detected : null;
+  if (!det) { try { det = detector.detect(cwd); } catch { det = entry && entry.detected; } }
+  const now = new Date().toISOString();
+  state.projects[proj.slug] = { ...(entry || {}), name: proj.name, path: proj.dir, remote: proj.remote, firstSeen: (entry && entry.firstSeen) || now, lastSeen: now, lastHash: full, detected: det };
   shared.writeState(state);
 
-  if (!entry || entry.learn !== true) return out(askMessage(proj, cwd, hash, message, lbd));
+  if (!entry || entry.learn !== true) return out(askMessage(proj, cwd, hash, message, det));
+
+  const kind = entry.kindOverride || (det && det.kind) || 'otro';
+  const kindSource = entry.kindOverride ? 'set by the user' : 'detected';
 
   let numstat, patch;
   try {
@@ -110,6 +134,9 @@ function main(raw) {
   out([
     `[learn-by-doing] A commit was just made: ${hash} "${message}".`,
     ...profileLines,
+    detectedLine(det, kind, kindSource),
+    `For a ${kind} project, favor lessons about: ${shared.KIND_FOCUS[kind] || shared.KIND_FOCUS.otro}`,
+    'Every lesson needs a "scope": universal (any language), lenguaje (tied to a language), framework (tied to a framework) or tipo (tied to this kind of project). Languages and frameworks are filled in automatically from the package of the lesson\'s code.file, so do not invent them. If you set them, they must come from the lists above.',
     `Size: ${useful.length} file(s), ${lines} line(s) changed${large ? ' -> LARGE commit, apply the large-commit rule' : ''}.`,
     'Changed areas:',
     areaList,

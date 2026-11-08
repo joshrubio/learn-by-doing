@@ -70,6 +70,10 @@ area: backend
 project: my-api
 commit: b41c0de
 modality: justifica
+scope: universal
+kind: app
+languages: ["typescript"]
+frameworks: ["nextjs"]
 related: ["layered-architecture"]
 appearances: ["other-repo@7d1e0aa@2026-11-08"]
 ---
@@ -92,6 +96,18 @@ node <plugin>/scripts/lbd.js config set notesDir "/path/to/vault/learn-by-doing"
 ```
 
 If the same concept appears in another repo, it is recorded as an appearance inside the same note instead of a duplicate. Notes are the source of truth, and the study space is built from them. Your progress is kept in the study space, not in the notes.
+
+## Kind of project, languages and frameworks
+
+What you need to learn depends on what you are building. A classic app needs the architecture inside its framework, design patterns and infrastructure. A plugin, an MCP server or an integration needs the contract with the other side, and the language weighs less. So every repo gets a **kind**, and every lesson gets tags.
+
+- **Detected, not guessed.** A script reads manifests (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `.claude-plugin/`...) and file extensions, so `node`, `nodejs` and `Node.js` never become three tags. In a monorepo it works per package, and a lesson takes the tags of the package its code belongs to.
+- **Kinds** (a closed list): `app`, `libreria`, `plugin`, `mcp`, `integracion`, `script`, `infraestructura`, `otro`.
+- **Confirmed once.** The first time in a repo, the activation question tells you the detected kind. You can accept it, say "yes, but it is another kind" and pick one, or say no.
+- **Weighted by kind.** The skill favors different lessons for each kind (architecture and patterns for an app, contracts and error handling for a plugin or MCP server).
+- **Scope of each concept.** `universal` concepts (separation of concerns) are shared across all your repos. `lenguaje`, `framework` and `tipo` concepts belong to their branch, so knowing `async` in JavaScript does not count as knowing it in Python.
+
+In the study space you can filter lessons by project, kind and language, and the concepts table shows each one's scope.
 
 ## Every lesson has the same shape
 
@@ -171,11 +187,13 @@ To pause the plugin everywhere, create an empty file `~/.learn-by-doing/off`, or
 - A profile change reaches the lessons Claude writes after your next `/study`, because the plugin reads the profile then.
 - Lesson quality depends on Claude following the skill. The script validates the shape of each lesson, not its content.
 - Creating the Artifact the first time and each sync ask for your approval in Claude Code.
+- Detection relies on manifests and extensions and knows about 35 common frameworks. An unusual layout may come out as `otro` or miss a framework. Correct the kind in the activation question.
 - If two concepts mean the same thing under different names, they are kept apart. The skill is told to reuse existing names, which prevents most of it.
 - If you edit a note so that it no longer follows the format, the script skips it with a warning instead of syncing it.
 
 ## Ideas for later
 
+- A map to explore your knowledge: discovered concepts, a frontier of what is next to what you know, and unexplored branches, built from the tags above.
 - Export your progress and profile into the notes too.
 - Semantic search across notes once a collection is large enough to need it.
 

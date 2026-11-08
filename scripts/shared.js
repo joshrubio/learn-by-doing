@@ -22,6 +22,25 @@ const MODALITIES = {
 
 const DEFAULT_MODALITIES = ['opcion-multiple', 'explica', 'predice-salida'];
 
+/* Closed list of project kinds. "otro" is the escape hatch. */
+const KINDS = ['app', 'libreria', 'plugin', 'mcp', 'integracion', 'script', 'infraestructura', 'otro'];
+
+/* What matters most to learn in each kind of project. The weight of language and
+   architecture differs, so the skill ranks lessons with this. */
+const KIND_FOCUS = {
+  app: 'architecture inside the framework, design patterns, data flow, infrastructure and deployment. The language matters through the framework conventions.',
+  libreria: 'public API design, versioning, testing and packaging. Architecture matters as far as it shapes the API.',
+  plugin: 'the plugin contract (manifest, hooks, skills, commands), lifecycle and extension points, permissions and safety. The language is secondary.',
+  mcp: 'the protocol, tool schemas and input validation, transport, error handling and permissions. The language is secondary.',
+  integracion: 'contracts with the other system, authentication, error and retry handling, data mapping and idempotency. The language is secondary.',
+  script: 'language fundamentals, error handling and clear structure. Architecture barely matters.',
+  infraestructura: 'declarative configuration, environments, secrets and security, reproducibility.',
+  otro: 'whatever the code shows most clearly. Balance concepts and decisions.',
+};
+
+/* Where a concept lives. Universal ones are shared across every language and framework. */
+const SCOPES = ['universal', 'lenguaje', 'framework', 'tipo'];
+
 const home = () => process.env.LBD_HOME || path.join(os.homedir(), '.learn-by-doing');
 const stateFile = () => path.join(home(), 'state.json');
 const configFile = () => path.join(home(), 'config.json');
@@ -74,7 +93,7 @@ function identify(dir) {
 }
 
 module.exports = {
-  FAMILIES, MODALITIES, DEFAULT_MODALITIES,
+  FAMILIES, MODALITIES, DEFAULT_MODALITIES, KINDS, KIND_FOCUS, SCOPES,
   home, notesDir, lessonsDir, readJson, writeJson, readConfig, configFile,
   readState, writeState, readProfile, identify, git, slugify,
 };
