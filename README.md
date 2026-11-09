@@ -6,7 +6,7 @@ Most of your code will be written by AI. What you need is the ability to read it
 
 Nothing interrupts your work. The lessons wait until you open the study space.
 
-> Status: prototype (v0.6.1). The study space is in Spanish for now.
+> Status: prototype (v0.6.2). The study space is in Spanish for now.
 
 ## Requirements
 
