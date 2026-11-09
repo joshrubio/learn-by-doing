@@ -6,7 +6,7 @@ Most of your code will be written by AI. What you need is the ability to read it
 
 Nothing interrupts your work. The lessons wait until you open the study space.
 
-> Status: prototype (v0.7.0). The study space is in Spanish for now.
+> Status: prototype (v0.8.0). The study space is in Spanish for now.
 
 ## Requirements
 
@@ -53,6 +53,7 @@ It ranks the repo's past commits by how much they teach, shows you the list and 
 | `/learn-repo [on\|off\|status]` | Turn learning on or off for the current repo |
 | `/learn-setup` | Choose how you want to learn from the terminal, without opening the study space |
 | `/learn-from-history [repo] [max]` | Turn the most instructive past commits into lessons |
+| `/learn-project [repo]` | Build a memory of the project and a few base lessons about it |
 
 ## Your notes
 
@@ -88,6 +89,7 @@ appearances: ["other-repo@7d1e0aa@2026-11-08"]
 - **Qué se construía:** ...
 ## Código
 ## Predice
+### Qué ocurre
 ## Concepto
 ## Ejercicio
 ## Relacionado
@@ -101,6 +103,15 @@ node <plugin>/scripts/lbd.js config set notesDir "/path/to/vault/learn-by-doing"
 ```
 
 If the same concept appears in another repo, it is recorded as an appearance inside the same note instead of a duplicate. Notes are the source of truth, and the study space is built from them. Your progress is kept in the study space, not in the notes.
+
+## Project memory and base lessons
+
+Lessons generated one commit at a time can feel random: the hook only sees a patch, so it cannot tell what is central to the project and what is a corner. To fix that, the plugin keeps a short memory of each repo you turn on.
+
+- **`/learn-project`** (or "yes" to the question asked right after you turn a repo on) scans the repo (README, manifests, entry points, folder tree), reads the files that carry the main flow and saves two things. A **memory**: what the project is, where things live, its main flow and the 3 to 8 concepts that matter most in it. And **4 to 6 base lessons**: what it is, how it is laid out, the main flow, the data, how to run and test it, the key decisions. They show up first on the project's card as "Empieza aquí".
+- **Every later commit** gets that memory back: the summary and structure place the lesson in the project (they feed the introduction), the core concepts are favored, and the lessons already taught in that repo are listed so they are not repeated.
+- **Variety.** The hook also reports how the latest lessons were spread over exercises and types, so the plugin stops defaulting to the same one.
+- The memory lives in `~/.learn-by-doing/memory/<repo>.json`, not in the repo. Rebuild it any time with `/learn-project`.
 
 ## Kind of project, languages and frameworks
 
@@ -133,7 +144,7 @@ Introduction, context, predict, concept, one exercise, result. Each lesson has i
 
 1. **Introduction.** What the repo is, where in it the change lives and, when the change spans several pieces, a small ASCII map of what was done. It places you in the project before any code, even weeks after the commit. Lessons saved before 0.7.0 have no introduction and simply start at the context.
 2. **Context.** What was being built and what you are about to learn.
-3. **Predict.** You commit to a guess before reading the explanation.
+3. **Predict.** You commit to a guess before reading the explanation. "Comprobar con Claude" tells you how close you were before you see the answer, and the lesson keeps a short "what actually happens" to compare with. It uses your own Claude usage and never runs on its own.
 4. **Concept.** A short mental model, not a definition.
 5. **Exercise.** Exactly one, always from the kinds you chose.
 6. **Result.** Right, partly right or not yet. It feeds the spaced review. "Continuar" takes you back to the lessons.
@@ -157,7 +168,7 @@ Open exercises are graded against key points by Claude, using the Artifact's ask
 ## What you get in the study space
 
 - **Inicio**: what the tool is, a small dashboard (lessons, to study, to review, mastered, progress per project, recent lessons) and these install instructions.
-- **Lecciones**: a switch at the side of the title alternates two views, and the study space remembers the last one you used. By lesson, with filters by project, kind, language, area and state, grouped by commit. By project, a vertical stack of cards with the project's kind, languages, number of lessons and commits, progress, tags of what you learn in it and the list of its lessons. Every lesson opens on its own page.
+- **Lecciones**: a switch at the side of the title alternates two views, and the study space remembers the last one you used. By lesson, with filters by project, kind, language, area and state, grouped by commit. By project, a vertical stack of cards with the project's kind and languages, its summary, the base lessons ("Empieza aquí"), the core concepts, number of lessons and commits, progress, tags of what you learn in it, its structure and the list of its lessons. Every lesson opens on its own page.
 - **Repaso**: spaced review with intervals of 1, 3, 7, 16 and 35 days. A concept you got wrong goes back to the start; a partly right one stays where it is.
 - **Conceptos**: everything you have seen, with its state and in how many projects it appeared. A concept has one state, shared by all your projects.
 - **Mapa**: a map of what you have discovered, what is next to it and what is unexplored (see "The map" above).
@@ -196,7 +207,8 @@ To pause the plugin everywhere, create an empty file `~/.learn-by-doing/off`, or
 - The plugin learns only from repos you said yes to. If a repo belongs to an employer or client, check that it is allowed to upload its code to a service of your own before saying yes.
 - Only `/study` uploads lessons, to your own Artifact, which is private by default. Sharing it is up to you from the Artifact's Share menu.
 - The skill is instructed to include only the few lines that illustrate a concept, never a whole file or diff, and never secrets, tokens or personal data. That is an instruction to the model, so skim your notes before sharing the Artifact with anyone.
-- Anyone who can open the Artifact can read the lessons in it.
+- The project memory (summary, folder structure, main flow) goes to the same Artifact with `/study`. It holds no code, but for a client repo it still describes how the project is built, so the same rule applies.
+- Anyone who can open the Artifact can read the lessons and project memories in it.
 - When Claude grades an answer, your answer and the lesson text are sent to Claude from your browser, on your own account.
 
 ## Known limits

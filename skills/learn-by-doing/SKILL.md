@@ -35,6 +35,7 @@ Teach the why, not the syntax. Pick at most 3 lessons per commit (1 or 2 for a s
 1. New for this user. Skip what they clearly know.
 2. Leverage. Concepts that appear everywhere (state, async, validation, separation of concerns, error handling, paradigms such as functional or object-oriented) beat a library detail.
 3. Risk. A bug, a security hole or an edge case the change avoids or introduces goes up.
+4. Project relevance. When the hook message gives the project memory, lessons about its core concepts, or about the piece of the structure the commit touches, outrank a detail that lives off the main path.
 
 Skip formatting, renames, dependency bumps, generated files and trivial config.
 
@@ -97,7 +98,7 @@ The learner may open a lesson weeks after the commit, so the page starts by plac
    - `learning`: the one concept this lesson teaches, as a promise to the reader.
    The project name is added automatically. The `title` names the concept, not the file.
 2. `code`: the user's real code, at most 15 lines, only the lines that illustrate the concept. Never paste the whole diff.
-3. `predict`: one short question to think about before reading the explanation.
+3. `predict`: one short question the learner can answer by thinking, before reading the explanation, and `predictAnswer`: what actually happens, in one or two sentences. The study space lets the learner write a prediction and ask Claude to check it against your `predictAnswer` and the explanation, so the question needs a concrete answer ("what does this return when the list is empty?"), never an opinion.
 4. `explain`: the concept in 3 or 4 lines, as a mental model and not a textbook definition.
 5. `exercise`: one exercise, chosen as below.
 
@@ -125,6 +126,45 @@ When the modality needs code (`predice-salida`, `encuentra-error`, `revisa-cambi
 
 Choice modalities add `options` (2 to 5, plausible wrong ones, right answer in a varied position, never always first), `answer` (index) and `why`.
 Open modalities add `keyPoints` (2 to 5 short statements a good answer covers, used to grade) and `modelAnswer` (a short reference answer in 2 to 4 sentences).
+
+## Using the project memory
+
+When the hook message has a "Project memory" block, the repo was studied once and the plugin remembers what it is. Use it:
+- Take `intro.project` from the summary, word for word or lightly shortened, so every lesson of the repo introduces it the same way.
+- Take `intro.where` from the structure: name the piece the commit touches and what is next to it.
+- Favor the core concepts it lists. A commit that touches the main flow deserves a lesson even when it is small. A commit that only polishes a corner does not.
+- Do not teach again an idea in "Already taught in this repo". Teach a clearly different side of it or pick something else.
+
+When the hook message has no memory, work as before from the patch alone.
+
+## Variety
+
+The hook message may list how the latest lessons were spread over exercises and types. Fit still comes first, but when two exercises fit about equally, pick the one used least lately, and never the same one three times in a row. Do not default to one exercise for a type: a reading lesson can end in a multiple choice, a decision in a comparison, a concept in a free recall. If none of the latest lessons was a `concepto` and the commit shows a new idea, write one.
+
+## Project primer
+
+A primer is a short, first course about one repo, written before its commits start to teach: a memory of the project plus 4 to 6 base lessons. It runs from `/learn-project`, or when the user says yes to the question the hook asks right after they turn a repo on. Never start one on your own.
+
+1. Call `scan_project` with the repo path. It returns the README excerpt, manifests, entry points, folder tree and recent commits.
+2. Read the files that carry the main flow: the README if the excerpt was cut, the entry points and 3 to 6 more. Do not read the whole repo.
+3. Call `save_project_memory` with:
+   - `summary`: what the project is and who it is for, in the user's language, at most 500 characters.
+   - `structure`: 3 to 12 pieces, each with a `path` and a `role` ("src/routes: receives HTTP requests and hands them to services").
+   - `flow`: the main flow in one or two sentences.
+   - `core`: 3 to 8 concept slugs that matter most in this project. Use catalog ids when one fits.
+   - `diagram`: optional ASCII map of the pieces, same limits as a lesson diagram.
+   - `commit`: the short hash of HEAD.
+4. Call `save_lessons` with `commit: { "hash": "base", "message": "Panorama del proyecto" }`, up to 6 lessons, each with `"primer": true` and `"order"` from 1. Every concept slug must start with the project slug and a dash, because these lessons belong to one repo (for example `my-api-panorama`). Pick from this list what the project actually has, in this order:
+   1. `<slug>-panorama`: what the project is, who uses it, what problem it solves. Include a diagram.
+   2. `<slug>-estructura`: where things live and why they are separated.
+   3. `<slug>-flujo-principal`: follow the main flow from input to output through the real files.
+   4. `<slug>-datos`: how data or state is modelled and stored. Skip if there is none.
+   5. `<slug>-ejecutar-y-probar`: how it is run, tested and deployed. Skip if the repo shows nothing about it.
+   6. `<slug>-decisiones`: one or two choices that shape the project and the alternative that was not taken.
+   Base lessons use real code of at most 15 lines from the files you read, an `intro` like any other lesson (the same `project` as the memory), a `predict` with its `predictAnswer`, and one exercise from the allowed ones. Spread the exercises: do not give all of them the same.
+5. Do not explain the primer in chat. The command or hook says what to reply.
+
+A rebuild refreshes the memory. Base lessons whose concept already exists are not written again.
 
 ## Large commits
 
@@ -161,6 +201,7 @@ Call the `save_lessons` tool of the learn-by-doing MCP server. Never use shell c
       },
       "code": { "file": "src/routes/login.js", "text": "..." },
       "predict": "What would you have to change if the users moved to another database?",
+      "predictAnswer": "Every route that queries the database directly, one by one. With a service in between, only the service changes.",
       "explain": "...",
       "exercise": {
         "modality": "justifica",
@@ -180,4 +221,4 @@ Each lesson becomes a note file. If the concept already has a note, the script r
 
 ## Privacy
 
-Lessons live in `~/.learn-by-doing/` on the user's machine. Only `/study` uploads them, to the user's own private Artifact. Show only the lines that illustrate the concept, never a whole file or diff. Do not include secrets, tokens, internal URLs or personal data in any field.
+Lessons live in `~/.learn-by-doing/` on the user's machine. Only `/study` uploads them, to the user's own private Artifact. Show only the lines that illustrate the concept, never a whole file or diff. Do not include secrets, tokens, internal URLs or personal data in any field. The same goes for the project memory: it is uploaded to the study space too, so write what the project is and how it is laid out, never credentials, internal hostnames or customer data.

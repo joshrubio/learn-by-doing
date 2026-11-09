@@ -63,6 +63,8 @@ function lessonToMarkdown(l) {
     related: l.related || [],
     appearances: l.appearances || [],
     example: l.example === true,
+    primer: l.primer === true ? true : undefined,
+    order: l.primer === true ? l.order : undefined,
   };
   const out = [];
   out.push(`# ${oneLine(l.title)}\n`);
@@ -84,6 +86,10 @@ function lessonToMarkdown(l) {
   out.push(codeBlock(l.code));
   out.push('## Predice\n');
   out.push(`${esc(l.predict)}\n`);
+  if (l.predictAnswer) {
+    out.push('### Qué ocurre\n');
+    out.push(`${esc(l.predictAnswer)}\n`);
+  }
   out.push('## Concepto\n');
   out.push(`${esc(l.explain)}\n`);
   out.push('## Ejercicio\n');
@@ -161,6 +167,7 @@ function markdownToLesson(text) {
   }
   const lessonCode = takeCode(code);
   if (!lessonCode) return { error: 'missing code block under "Código"' };
+  const predParts = chunks(pred, '### ');
 
   const parts = chunks(ex, '### ');
   const head = parts[0].lines;
@@ -201,12 +208,15 @@ function markdownToLesson(text) {
       concept: data.id,
       title: titleLine.replace(/^# /, '').trim(),
       code: lessonCode.code,
-      predict: textOf(pred),
+      predict: textOf(predParts[0].lines),
+      predictAnswer: textOf((predParts.find((p) => p.heading === 'Qué ocurre') || { lines: [] }).lines),
       explain: textOf(expl),
       exercise,
       related: Array.isArray(data.related) ? data.related : rel ? [...textOf(rel).matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1]) : [],
       appearances: Array.isArray(data.appearances) ? data.appearances : [],
       example: data.example === true,
+      primer: data.primer === true,
+      order: data.primer === true && Number.isFinite(Number(data.order)) ? Number(data.order) : 0,
     },
   };
 }

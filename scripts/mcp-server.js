@@ -28,6 +28,36 @@ const TOOLS = [
     },
   },
   {
+    name: 'scan_project',
+    description: 'Compact scan of a repo for the project primer: README excerpt, manifests, entry points, folder tree and recent commits. Only for repos the user turned on and asked a primer for. Read the key files afterwards, then call save_project_memory and save_lessons.',
+    inputSchema: {
+      type: 'object',
+      properties: { project: { type: 'string', description: 'Absolute path of the repository' } },
+      required: ['project'],
+    },
+  },
+  {
+    name: 'save_project_memory',
+    description: 'Save what the plugin remembers about a repo: what it is, where things live, its main flow and the concepts that matter most in it. The commit hook hands this back to Claude on every later commit so lessons are placed in the project and favor its core. Only for repos the user turned on.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', description: 'Absolute path of the repository' },
+        summary: { type: 'string', description: 'What the project is and who it is for, at most 500 characters' },
+        structure: {
+          type: 'array', minItems: 2, maxItems: 14,
+          description: 'Where things live: the pieces of the project, one line each',
+          items: { type: 'object', properties: { path: { type: 'string', description: 'Folder or file, at most 80 characters' }, role: { type: 'string', description: 'What it is responsible for, at most 160 characters' } }, required: ['path', 'role'] },
+        },
+        flow: { type: 'string', description: 'Optional. The main flow in one or two sentences, at most 500 characters' },
+        core: { type: 'array', minItems: 3, maxItems: 8, items: { type: 'string' }, description: 'The ideas that matter most in this project, as kebab-case concept slugs (catalog ids when one fits)' },
+        diagram: { type: 'string', description: 'Optional ASCII map of the project, at most 16 lines and 64 columns' },
+        commit: { type: 'string', description: 'Optional. Short hash of HEAD when the memory was built' },
+      },
+      required: ['project', 'summary', 'structure', 'core'],
+    },
+  },
+  {
     name: 'list_concepts',
     description: 'List every concept already saved across all repos (slug, type, area, project, commit, title). Call it before writing lessons so existing slugs are reused.',
     inputSchema: { type: 'object', properties: {} },
@@ -57,6 +87,15 @@ function call(name, a) {
   if (name === 'save_lessons') {
     if (!a || typeof a.project !== 'string' || !a.commit || !Array.isArray(a.lessons)) return { text: 'project, commit and lessons are required', isError: true };
     return run(['add', '--project', a.project], JSON.stringify({ commit: a.commit, lessons: a.lessons }));
+  }
+  if (name === 'scan_project') {
+    if (!a || typeof a.project !== 'string') return { text: 'project is required', isError: true };
+    return run(['scan', '--project', a.project]);
+  }
+  if (name === 'save_project_memory') {
+    if (!a || typeof a.project !== 'string') return { text: 'project is required', isError: true };
+    const { project, ...memory } = a;
+    return run(['memory', 'save', '--project', project], JSON.stringify(memory));
   }
   if (name === 'list_concepts') return run(['list']);
   if (name === 'set_repo') {

@@ -63,6 +63,20 @@ const readState = () => {
 };
 const writeState = (s) => writeJson(stateFile(), s);
 
+/* What the plugin remembers about a repo: what it is, where things live, what is central to it. */
+const memoryDir = () => path.join(home(), 'memory');
+const memoryFile = (slug) => path.join(memoryDir(), `${slug}.json`);
+const readMemory = (slug) => readJson(memoryFile(slug), null);
+function listMemories() {
+  let files = [];
+  try { files = fs.readdirSync(memoryDir()).filter((f) => f.endsWith('.json')); } catch { return []; }
+  return files.map((f) => {
+    const file = path.join(memoryDir(), f);
+    const text = fs.readFileSync(file, 'utf8');
+    try { return { slug: f.slice(0, -5), file, text, doc: JSON.parse(text) }; } catch { return null; }
+  }).filter(Boolean);
+}
+
 function readProfile() {
   const file = readJson(path.join(home(), 'profile.json'), {});
   const enabled = Array.isArray(file.modalities) ? file.modalities.filter((m) => MODALITIES[m]) : [];
@@ -96,4 +110,5 @@ module.exports = {
   FAMILIES, MODALITIES, DEFAULT_MODALITIES, KINDS, KIND_FOCUS, SCOPES,
   home, notesDir, lessonsDir, readJson, writeJson, readConfig, configFile,
   readState, writeState, readProfile, identify, git, slugify,
+  memoryDir, memoryFile, readMemory, listMemories,
 };

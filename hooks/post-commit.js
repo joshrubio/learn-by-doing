@@ -41,6 +41,56 @@ function pendingNotes() {
   } catch { return 0; }
 }
 
+/* Lessons already written, newest first. Read only to give Claude some memory of what was taught. */
+function savedLessons() {
+  try {
+    const notes = require(path.join(__dirname, '..', 'scripts', 'notes.js'));
+    const dir = shared.lessonsDir();
+    const all = [];
+    for (const f of fs.readdirSync(dir)) {
+      if (!f.endsWith('.md')) continue;
+      const r = notes.markdownToLesson(fs.readFileSync(path.join(dir, f), 'utf8'));
+      if (r.lesson && r.lesson.id) all.push(r.lesson);
+    }
+    return all.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  } catch { return []; }
+}
+
+const tally = (items) => Object.entries(items.reduce((m, x) => ((m[x] = (m[x] || 0) + 1), m), {})).sort((a, b) => b[1] - a[1]);
+
+/* Without this, every commit is judged alone and the model keeps choosing the same kind of lesson. */
+function varietyLines(all, enabled) {
+  const recent = all.slice(0, 8);
+  if (recent.length < 3) return [];
+  const used = tally(recent.map((l) => l.exercise && l.exercise.modality).filter(Boolean));
+  const types = tally(recent.map((l) => l.type).filter(Boolean));
+  const unused = enabled.filter((m) => !used.some(([u]) => u === m));
+  const lastThree = recent.slice(0, 3).map((l) => l.exercise && l.exercise.modality);
+  const lines = [
+    `Variety. Last ${recent.length} lessons by exercise: ${used.map(([m, n]) => `${m} x${n}`).join(', ')}. By type: ${types.map(([t, n]) => `${t} x${n}`).join(', ')}.`,
+    'Fit still comes first, but when two exercises fit about equally pick the one used least lately. Do not use the same exercise three times in a row.',
+  ];
+  if (unused.length) lines.push(`Enabled and not used lately: ${unused.join(', ')}.`);
+  if (lastThree[0] && lastThree.every((m) => m === lastThree[0])) lines.push(`The last three lessons all used "${lastThree[0]}", so this time use a different one.`);
+  if (!recent.slice(0, 5).some((l) => l.type === 'concepto')) lines.push('No "concepto" lesson lately: if the commit shows a new idea, a concept lesson is welcome.');
+  return lines;
+}
+
+function memoryLines(mem, taught) {
+  const lines = [
+    `Project memory${mem.builtAtCommit ? ` (built at ${mem.builtAtCommit})` : ''}. Use it to place each lesson: take intro.project from the summary and intro.where from the structure.`,
+    `Summary: ${mem.summary}`,
+    'Structure:',
+    ...(mem.structure || []).map((s) => `- ${s.path}: ${s.role}`),
+  ];
+  if (mem.flow) lines.push(`Main flow: ${mem.flow}`);
+  if (mem.core && mem.core.length) lines.push(`Core concepts of this project, favor lessons that teach them or build on them: ${mem.core.join(', ')}. A lesson about a minor detail off that path should lose to one on it.`);
+  if (taught.length) lines.push(`Already taught in this repo, do not repeat the idea: ${taught.slice(0, 12).map((l) => `"${l.title}" (${l.id})`).join('; ')}.`);
+  return lines;
+}
+
+const NO_MEMORY_HINT = 'This repo has no project memory yet. At the end of your reply add one extra short line, in the user\'s language, suggesting /learn-project: it builds a few base lessons about the project and a memory of its structure that makes every later lesson more relevant. Say it only this once.';
+
 const out = (context) => process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: context } }));
 const fwd = (p) => p.replace(/\\/g, '/');
 const list = (a) => (a && a.length ? a.join(', ') : 'none');
@@ -66,7 +116,8 @@ function askMessage(proj, cwd, hash, message, det) {
     '- first option: enabled true, no kind (the detected one stays and keeps updating);',
     '- second option: ask one more AskUserQuestion with the 3 or 4 most plausible other kinds for this repo, chosen from app, libreria, plugin, mcp, integracion, script, infraestructura, otro (the user can type another with "Other"), then enabled true and kind set to their answer;',
     '- third option: enabled false.',
-    `If they said yes, read this commit with: git -C "${fwd(cwd)}" show ${hash}   and continue as the learn-by-doing skill describes, saving the lessons now. If they said no, say nothing more about it.`,
+    `After enabling (first or second option) ask once more with AskUserQuestion: "¿Quieres que haga ahora un panorama de ${proj.name}? Son unas 4 o 5 lecciones base y una memoria de su estructura, y gasta algo de tu uso de Claude." with two options: "Sí, ahora" and "Más tarde (/learn-project)". If they say yes, follow the "Project primer" section of the learn-by-doing skill for project "${fwd(cwd)}" first. If they say later, skip it.`,
+    `If they said yes to learning here, then read this commit with: git -C "${fwd(cwd)}" show ${hash}   and continue as the learn-by-doing skill describes, saving the lessons now. If they said no, say nothing more about it.`,
   ].join('\n');
 }
 
@@ -149,10 +200,22 @@ function main(raw) {
     p.rusty.length ? `Rusty concepts, teach as a short refresher: ${p.rusty.join(', ')}.` : '',
   ].filter(Boolean);
 
+  const saved = savedLessons();
+  const mem = shared.readMemory(proj.slug);
+  let projectLines = [];
+  if (mem) projectLines = memoryLines(mem, saved.filter((l) => l.project === proj.slug));
+  else if (!entry.memoryHinted) {
+    projectLines = [NO_MEMORY_HINT];
+    state.projects[proj.slug].memoryHinted = true;
+    shared.writeState(state);
+  }
+
   out([
     `[learn-by-doing] A commit was just made: ${hash} "${message}".`,
     ...profileLines,
     detectedLine(det, kind, kindSource),
+    ...projectLines,
+    ...varietyLines(saved, p.modalities),
     `For a ${kind} project, favor lessons about: ${shared.KIND_FOCUS[kind] || shared.KIND_FOCUS.otro}`,
     'Every lesson needs a "scope": universal (any language), lenguaje (tied to a language), framework (tied to a framework) or tipo (tied to this kind of project). Languages and frameworks are filled in automatically from the package of the lesson\'s code.file, so do not invent them. If you set them, they must come from the lists above.',
     `Concepts in the catalog that the study-space map is built on. When the idea of a lesson matches one, use its id as the lesson's "concept"; otherwise write a new descriptive kebab-case slug: ${catalog.slugsFor(det, kind).join(', ')}.`,

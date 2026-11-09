@@ -10,6 +10,7 @@ const TOOLING = new Set(['vite', 'tailwind', 'prisma', 'vitest', 'jest', 'playwr
 const TYPES = ['concepto', 'decision', 'riesgo', 'lectura'];
 const AREAS = ['frontend', 'backend', 'base-de-datos', 'tests', 'config', 'codigo', 'docs', 'otros'];
 const MAX_PER_COMMIT = 4;
+const MAX_PRIMER = 6;
 const MAX_DIAGRAM_ROWS = 16;
 const MAX_DIAGRAM_COLS = 64;
 const BATCH = 40;
@@ -57,19 +58,14 @@ function validate(l, i) {
   if (!SCOPES.includes(l.scope)) errs.push(`scope must be one of ${SCOPES.join(', ')} (universal: any language; lenguaje: tied to a language; framework: tied to a framework; tipo: tied to the kind of project)`);
   for (const k of ['languages', 'frameworks']) if (l[k] !== undefined && !(Array.isArray(l[k]) && l[k].every(str))) errs.push(`${k} must be a list of strings`);
   if (!str(l.concept) || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(l.concept)) errs.push('concept must be a kebab-case slug');
-  for (const k of ['title', 'predict', 'explain']) if (!str(l[k])) errs.push(`${k} is required`);
+  for (const k of ['title', 'predict', 'predictAnswer', 'explain']) if (!str(l[k])) errs.push(`${k} is required${k === 'predictAnswer' ? ' (what actually happens, in one or two sentences, so the learner can compare their prediction)' : ''}`);
+  if (l.primer !== undefined && typeof l.primer !== 'boolean') errs.push('primer must be true or false');
+  if (l.primer === true && !(Number.isInteger(l.order) && l.order >= 1 && l.order <= 9)) errs.push('a primer lesson needs "order", an integer from 1 to 9');
   const x = l.context;
   if (!x || !str(x.building) || !str(x.snippetRole) || !str(x.learning)) errs.push('context.building, context.snippetRole and context.learning are required');
   const n = l.intro;
   if (!n || !str(n.project) || !str(n.where)) errs.push('intro.project (what the repo is) and intro.where (where in it the change lives) are required');
-  else if (n.diagram !== undefined && n.diagram !== null) {
-    if (!str(n.diagram)) errs.push('intro.diagram must be a non-empty string when present, or left out');
-    else {
-      const rows = n.diagram.replace(/\s+$/, '').split('\n');
-      if (rows.length > MAX_DIAGRAM_ROWS) errs.push(`intro.diagram has ${rows.length} lines, keep it to ${MAX_DIAGRAM_ROWS} or fewer`);
-      if (rows.some((r) => r.length > MAX_DIAGRAM_COLS)) errs.push(`intro.diagram has a line wider than ${MAX_DIAGRAM_COLS} characters, it would not fit on a phone`);
-    }
-  }
+  else checkDiagram(n.diagram, errs, 'intro.diagram');
   if (!l.code || !str(l.code.text)) errs.push('code.text is required');
   else if (l.code.text.split('\n').length > 20) errs.push('code.text is longer than 20 lines, keep only the lines that matter');
   errs.push(...validateExercise(l.exercise));
@@ -145,12 +141,15 @@ async function add() {
   try { input = JSON.parse(await readStdin()); } catch { fail('stdin is not valid JSON'); }
   const lessons = Array.isArray(input.lessons) ? input.lessons : [];
   if (lessons.length === 0) fail('no lessons given');
-  if (lessons.length > MAX_PER_COMMIT) fail(`at most ${MAX_PER_COMMIT} lessons per commit, got ${lessons.length}. Keep the most valuable ones`);
+  const cap = lessons.every((l) => l && l.primer === true) ? MAX_PRIMER : MAX_PER_COMMIT;
+  if (lessons.length > cap) fail(`at most ${cap} lessons per call, got ${lessons.length}. Keep the most valuable ones`);
   const problems = lessons.map(validate).filter(Boolean);
   if (problems.length) fail(problems.join('\n'));
 
   const state = S.readState();
   const proj = S.identify(project);
+  const stray = lessons.filter((l) => l.primer === true && !l.concept.startsWith(`${proj.slug}-`));
+  if (stray.length) fail(`primer lessons belong to one project, so their concept must start with "${proj.slug}-" (for example "${proj.slug}-panorama"). Fix: ${stray.map((l) => l.concept).join(', ')}`);
   const known = state.projects[proj.slug] || {};
   if (known.learn === false) fail(`learning is turned off for ${proj.name}. Run "repo enable" only if the user asks for it`);
   const now = new Date().toISOString();
@@ -183,7 +182,8 @@ async function add() {
       commit: { hash: commit.hash || '', message: commit.message || '', date: commit.date || '' },
       scope: l.scope, kind: tagged[i].kind, languages: tagged[i].languages, frameworks: tagged[i].frameworks,
       context: l.context, intro: cleanIntro(l.intro), type: l.type, area: l.area, title: l.title, code: { file: (l.code.file || '').toString(), text: l.code.text },
-      predict: l.predict, explain: l.explain, exercise: cleanExercise(l.exercise),
+      predict: l.predict, predictAnswer: l.predictAnswer.trim(), explain: l.explain, exercise: cleanExercise(l.exercise),
+      primer: l.primer === true, order: l.order,
       related: Array.isArray(l.related) ? l.related.filter(str) : [], appearances: [], example: l.example === true,
     }));
     added++;
@@ -220,7 +220,69 @@ function repo() {
     kind: entry ? entry.kindOverride || (det && det.kind) || null : null,
     kindSource: entry && entry.kindOverride ? 'user' : 'detected',
     languages: det ? det.languages : [], frameworks: det ? det.frameworks : [],
+    memory: !!S.readMemory(proj.slug),
   }));
+}
+
+function checkDiagram(d, errs, name) {
+  if (d === undefined || d === null) return;
+  if (!str(d)) { errs.push(`${name} must be a non-empty string when present, or left out`); return; }
+  const rows = d.replace(/\s+$/, '').split('\n');
+  if (rows.length > MAX_DIAGRAM_ROWS) errs.push(`${name} has ${rows.length} lines, keep it to ${MAX_DIAGRAM_ROWS} or fewer`);
+  if (rows.some((r) => r.length > MAX_DIAGRAM_COLS)) errs.push(`${name} has a line wider than ${MAX_DIAGRAM_COLS} characters`);
+}
+
+function validateMemory(m) {
+  const errs = [];
+  if (!m || typeof m !== 'object') return ['a JSON object is required'];
+  if (!str(m.summary) || m.summary.length > 500) errs.push('summary is required, at most 500 characters: what the project is and who it is for');
+  if (!Array.isArray(m.structure) || m.structure.length < 2 || m.structure.length > 14) errs.push('structure must list 2 to 14 pieces');
+  else m.structure.forEach((s, i) => {
+    if (!s || !str(s.path) || s.path.length > 80 || !str(s.role) || s.role.length > 160) errs.push(`structure[${i}] needs path (at most 80 characters) and role (at most 160)`);
+  });
+  if (m.flow !== undefined && !(str(m.flow) && m.flow.length <= 500)) errs.push('flow must be a string of at most 500 characters when present');
+  if (!Array.isArray(m.core) || m.core.length < 3 || m.core.length > 8 || !m.core.every((c) => typeof c === 'string' && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(c))) errs.push('core must be 3 to 8 kebab-case concept slugs, the ideas that matter most in this project (catalog ids when one fits)');
+  checkDiagram(m.diagram, errs, 'diagram');
+  return errs;
+}
+
+function memory() {
+  const action = argv[1];
+  const proj = S.identify(project);
+  if (action === 'get') {
+    const m = S.readMemory(proj.slug);
+    return console.log(m ? JSON.stringify(m, null, 2) : 'no memory yet');
+  }
+  if (action !== 'save') fail('usage: memory get | memory save (JSON on stdin) [--project dir]');
+  return readStdin().then((raw) => {
+    let input;
+    try { input = JSON.parse(raw); } catch { fail('stdin is not valid JSON'); }
+    const errs = validateMemory(input);
+    if (errs.length) fail(errs.join('; '));
+    const state = S.readState();
+    const known = state.projects[proj.slug] || {};
+    if (known.learn !== true) fail(`learning is not turned on for ${proj.name}, so no memory is saved`);
+    const prev = S.readMemory(proj.slug) || {};
+    const now = new Date().toISOString();
+    const doc = {
+      project: proj.slug,
+      name: proj.name,
+      summary: input.summary.trim(),
+      structure: input.structure.map((s) => ({ path: s.path.trim(), role: s.role.trim() })),
+      core: input.core,
+      builtAtCommit: str(input.commit) ? input.commit.trim() : prev.builtAtCommit || '',
+      createdAt: prev.createdAt || now,
+      updatedAt: now,
+    };
+    if (str(input.flow)) doc.flow = input.flow.trim();
+    if (str(input.diagram)) doc.diagram = input.diagram.replace(/\s+$/, '');
+    S.writeJson(S.memoryFile(proj.slug), doc);
+    console.log(`memory saved for ${proj.slug}: ${doc.structure.length} pieces, ${doc.core.length} core concepts. It reaches the study space with /study.`);
+  });
+}
+
+function scanCmd() {
+  console.log(JSON.stringify(require('./scan').scan(project), null, 2));
 }
 
 function status() {
@@ -228,7 +290,7 @@ function status() {
   const state = S.readState();
   const cfg = S.readConfig();
   const pluginJson = S.readJson(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), {});
-  const pending = all.filter((l) => !state.sync[l.id] || state.sync[l.id].hash !== l.hash).length;
+  const pending = pendingItems(state).length;
   const p = S.readProfile();
   console.log(JSON.stringify({
     home: S.home().replace(/\\/g, '/'),
@@ -276,21 +338,32 @@ function config() {
   else fail('usage: config get | config set <key> <value>');
 }
 
+/* Everything waiting for the study space: project memories first, then new or edited lessons. */
+function pendingItems(state) {
+  const changed = (key, hash) => !state.sync[key] || state.sync[key].hash !== hash;
+  const memories = S.listMemories()
+    .map((m) => ({ key: `project:${m.slug}`, collection: 'projects', doc_id: m.slug, hash: N.hashOf(m.text), doc: m.doc, out: `__project-${m.slug}.json` }))
+    .filter((i) => changed(i.key, i.hash));
+  const lessons = allLessons({ warn: false })
+    .filter((l) => changed(l.id, l.hash))
+    .map((l) => { const { file, hash, ...doc } = l; return { key: l.id, collection: 'lessons', doc_id: l.id, hash, doc, out: `${l.id}.json` }; });
+  return [...memories, ...lessons];
+}
+
 function syncPlan() {
   const state = S.readState();
-  const todo = allLessons().filter((l) => !state.sync[l.id] || state.sync[l.id].hash !== l.hash);
+  const todo = pendingItems(state);
   fs.rmSync(outbox(), { recursive: true, force: true });
   const take = todo.slice(0, BATCH);
-  const writes = take.map((l) => {
-    const { file, hash, ...doc } = l;
-    const out = path.join(outbox(), `${l.id}.json`);
-    S.writeJson(out, doc);
-    const w = { op: 'set', collection: 'lessons', doc_id: l.id, file_path: out.replace(/\\/g, '/') };
-    if (state.sync[l.id] && state.sync[l.id].version) w.if_version = state.sync[l.id].version;
+  const writes = take.map((i) => {
+    const out = path.join(outbox(), i.out);
+    S.writeJson(out, i.doc);
+    const w = { op: 'set', collection: i.collection, doc_id: i.doc_id, file_path: out.replace(/\\/g, '/') };
+    if (state.sync[i.key] && state.sync[i.key].version) w.if_version = state.sync[i.key].version;
     return w;
   });
-  S.writeJson(path.join(outbox(), 'plan.json'), { items: take.map((l) => ({ id: l.id, hash: l.hash })) });
-  console.log(JSON.stringify({ count: take.length, remaining: todo.length - take.length, writes }));
+  S.writeJson(path.join(outbox(), 'plan.json'), { items: take.map((i) => ({ id: i.key, hash: i.hash })) });
+  console.log(JSON.stringify({ count: take.length, lessons: take.filter((i) => i.collection === 'lessons').length, remaining: todo.length - take.length, writes }));
 }
 
 function markSynced() {
@@ -339,6 +412,6 @@ function history() {
 }
 
 const cmd = argv[0];
-const commands = { add, list, status, repo, config, profile, 'sync-plan': syncPlan, 'mark-synced': markSynced, history };
+const commands = { add, list, status, repo, memory, scan: scanCmd, config, profile, 'sync-plan': syncPlan, 'mark-synced': markSynced, history };
 if (commands[cmd]) commands[cmd]();
 else fail(`usage: lbd.js ${Object.keys(commands).join('|')}`);
