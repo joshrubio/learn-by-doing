@@ -215,6 +215,8 @@ Call the `save_lessons` tool of the learn-by-doing MCP server. Never use shell c
 }
 ```
 
+`related` lists 1 to 3 other concepts this one connects to, as slugs (catalog ids when one fits). The study space draws them as links in its 3D map, so name real neighbours, not everything you can think of.
+
 `area` is one of: frontend, backend, base-de-datos, tests, config, codigo, docs, otros. `concept` is a short kebab-case slug, stable across commits and projects so repeats are detected. For a commit from the past (history mode) add `"date": "YYYY-MM-DD"` to `commit`. The tool rejects invalid lessons and returns why, fix and call it again.
 
 Each lesson becomes a note file. If the concept already has a note, the script records the new project and commit as an appearance inside the existing note instead of creating a duplicate. Saved lessons wait locally until the user runs `/study`, which syncs new and edited notes to the study space in one batch. Never call the Artifact or ArtifactData tools from a commit hook turn.

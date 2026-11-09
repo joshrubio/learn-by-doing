@@ -143,29 +143,23 @@ legend{font:600 1rem var(--font-display);padding:0 6px}
 .mapsum{color:var(--muted);font-size:.9rem;margin:0 0 10px}
 .legend{display:flex;gap:14px;flex-wrap:wrap;margin:0 0 12px;font-size:.82rem;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
-.legend i{display:inline-block;width:16px;height:12px;border-radius:3px;border:1.5px solid var(--line)}
-.legend i.descubierto{background:color-mix(in srgb,var(--accent) 14%,var(--surface));border-color:var(--accent)}
-.legend i.frontera{border-style:dashed;border-color:var(--accent)}
-.legend i.conocido{border-color:var(--ok)}
-.legend i.sin-explorar{border-style:dotted;background:var(--code)}
-.mapwrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:16px;margin-bottom:14px}
-.mapcanvas{position:relative}
-.mapcanvas svg{position:absolute;left:0;top:0;pointer-events:none}
-.edge{fill:none;stroke:var(--line);stroke-width:1.5}
-.edge.on{stroke:var(--accent)}
-.node{position:absolute;display:flex;flex-direction:column;justify-content:center;gap:3px;text-align:left;padding:6px 10px;border-radius:8px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font:500 .8rem/1.25 var(--font-body);cursor:pointer;overflow:hidden}
-.node .nt{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.node small{font:500 .64rem var(--font-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.node.descubierto{background:color-mix(in srgb,var(--accent) 14%,var(--surface));border-color:var(--accent)}
-.node.frontera{border-style:dashed;border-color:var(--accent)}
-.node.conocido{border-color:var(--ok)}
-.node.sin-explorar{color:var(--muted);background:var(--code);border-style:dotted}
-.node.oxidado{border-color:var(--warn)}
-.node[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:2px}
 .pill.descubierto{border-color:var(--accent);color:var(--accent)}
 .pill.frontera{border-color:var(--accent);color:var(--accent);border-style:dashed}
 .pill.conocido{border-color:var(--ok);color:var(--ok)}
 .pill.sin-explorar{border-style:dotted}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:50%}
+.legend i.descubierto{background:var(--accent)}
+.legend i.conocido{background:var(--ok)}
+.legend i.frontera{background:color-mix(in srgb,var(--accent) 50%,var(--bg))}
+.legend i.sin-explorar{background:color-mix(in srgb,var(--muted) 45%,var(--bg))}
+.legend i.proyecto{background:color-mix(in srgb,var(--ink) 80%,var(--bg))}
+.legend i.base{background:color-mix(in srgb,var(--accent) 50%,var(--ink))}
+.graphbox{position:relative;height:min(68vh,560px);min-height:380px;border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden;touch-action:none}
+.graphcanvas{position:absolute;inset:0}
+.glabels{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.glabel{position:absolute;left:0;top:0;white-space:nowrap;font:500 .72rem var(--font-body);color:var(--muted);text-shadow:0 0 3px var(--surface),0 0 3px var(--surface),0 0 6px var(--surface);will-change:transform}
+.glabel.w2{color:var(--ink)}
+.glabel.w3{color:var(--ink);font-weight:700;font-size:.8rem}
 .nodelist{display:flex;gap:8px;flex-wrap:wrap}
 .explain{white-space:pre-wrap;background:var(--code);border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:10px;font-size:.92rem}
 .viewhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
@@ -252,6 +246,8 @@ const LEVEL_KEYS=['Cada pieza tiene una responsabilidad','Se puede cambiar una s
 
 const FEED_MODES=['lecciones','proyectos'];
 const LS_FEED='lbd-feed-mode';
+const MAP_VIEWS=['grafo','lista'];
+const LS_MAPVIEW='lbd-map-view';
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
 function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 
@@ -260,7 +256,9 @@ const S={lessons:[],apps:[],progress:{},profile:null,db:null,sample:null,uid:nul
   feedMode:FEED_MODES.includes(lsGet(LS_FEED))?lsGet(LS_FEED):'lecciones',modeTouched:false,projectsMem:{},pred:{},
   filters:{project:'todos',area:'todas',state:'todos',kind:'todos',lang:'todos'},
   draft:null,diag:{},levelAns:'',levelRes:null,levelBusy:false,reco:null,saved:false,editing:false,skipSetup:false,
-  mapBranch:'universal',mapNode:null,explain:{}};
+  mapNode:null,explain:{},
+  mapView:MAP_VIEWS.includes(lsGet(LS_MAPVIEW))?lsGet(LS_MAPVIEW):'grafo',viewTouched:false,mapTouched:false,mapShow:null,mapChips:null,mapLayers:{req:true,rel:true,proj:true},
+  graphState:'idle',graphWhy:'',hoverId:null,graph:null};
 
 function h(tag,attrs,...kids){
   const el=document.createElement(tag);
@@ -621,10 +619,12 @@ const filtered=()=>sorted().filter(l=>(S.filters.project==='todos'||l.project===
 async function setFeedMode(mode){
   if(!FEED_MODES.includes(mode)||S.feedMode===mode)return;
   S.feedMode=mode;S.modeTouched=true;lsSet(LS_FEED,mode);render();
-  if(S.db&&S.uid){
-    try{await S.db.collection('data/users/'+S.uid).doc('prefs').set({feedMode:mode,updatedAt:Date.now()});}
-    catch(e){/* the choice still lives in this browser */}
-  }
+  savePrefs();
+}
+async function savePrefs(){
+  if(!S.db||!S.uid)return;
+  try{await S.db.collection('data/users/'+S.uid).doc('prefs').set({feedMode:S.feedMode,mapView:S.mapView,updatedAt:Date.now()});}
+  catch(e){/* the choice still lives in this browser */}
 }
 function modeToggle(){
   const b=(m,t)=>h('button',{class:'chip',type:'button','aria-pressed':String(S.feedMode===m),onclick:()=>setFeedMode(m)},t);
@@ -886,7 +886,6 @@ const ALIAS=new Map();
 CATALOG.nodes.forEach(n=>{ALIAS.set(n.id,n.id);(n.aliases||[]).forEach(a=>ALIAS.set(a,n.id));});
 const resolveNode=(slug)=>ALIAS.get(slug)||null;
 const MAP_STATE_LABEL={descubierto:'Descubierto',frontera:'Frontera',conocido:'Ya lo conoces','sin-explorar':'Sin explorar'};
-const NW=176,NH=64,GX=60,GY=14;
 
 function lessonBranches(l){
   const out=new Set(['universal']);
@@ -937,60 +936,219 @@ function computeMap(){
   nodes.forEach(n=>{const b=byBranch[n.branch];b.total++;if(n.state==='descubierto'||n.state==='conocido')b.disc++;if(n.state==='frontera')b.front++;});
   return{nodes,frontier,byBranch,relevant};
 }
-function layout(branchId,map){
-  const list=[...map.nodes.values()].filter(n=>n.branch===branchId);
-  const inBranch=new Set(list.map(n=>n.id));
-  const depth=new Map();
-  const dep=(n)=>{
-    if(depth.has(n.id))return depth.get(n.id);
-    depth.set(n.id,0);
-    let d=0;
-    n.requires.forEach(r=>{if(inBranch.has(r))d=Math.max(d,dep(map.nodes.get(r))+1);});
-    depth.set(n.id,d);
-    return d;
+/* ---------- 3D graph engine ----------
+   Concepts, base lessons and projects as nodes, prerequisites / related lessons / "was taught in"
+   as links. The library is loaded on demand the first time the map opens. */
+const GRAPH_LIB={url:'https://cdn.jsdelivr.net/npm/3d-force-graph@1.79.0/dist/3d-force-graph.min.js',integrity:'sha384-I8xUqUlkgn1YFxE2iHhBohLpcR9rKT9MSaKUFK/+opyNDd5UX5j98GymiICW9V76'};
+const MAX_LABELS=36;
+const reducedMotion=()=>!!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches);
+const hasWebGL=()=>{try{const c=document.createElement('canvas');return !!(c.getContext('webgl2')||c.getContext('webgl'));}catch(e){return false;}};
+const escHtml=(t)=>String(t).replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const idOf=(e)=>(e&&typeof e==='object')?e.id:e;
+
+function toRGB(c){
+  c=String(c).trim();
+  if(c[0]==='#'){if(c.length===4)c='#'+c[1]+c[1]+c[2]+c[2]+c[3]+c[3];const n=parseInt(c.slice(1),16);return[n>>16&255,n>>8&255,n&255];}
+  const m=c.match(/[\d.]+/g);return m?m.slice(0,3).map(Number):[128,128,128];
+}
+function mix(a,b,t){const A=toRGB(a),B=toRGB(b);return 'rgb('+A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(',')+')';}
+function themeTokens(){
+  const cs=getComputedStyle(document.documentElement),g=(k)=>cs.getPropertyValue(k).trim();
+  return{bg:g('--bg'),surface:g('--surface'),ink:g('--ink'),muted:g('--muted'),accent:g('--accent'),ok:g('--ok'),warn:g('--warn')};
+}
+function baseColor(n,t){
+  if(n.kind==='project')return mix(t.ink,t.bg,.2);
+  if(n.kind==='base')return mix(t.accent,t.ink,.5);
+  if(n.prog==='oxidado'||n.rusty)return t.warn;
+  if(n.state==='descubierto')return t.accent;
+  if(n.state==='conocido')return t.ok;
+  if(n.state==='frontera')return mix(t.accent,t.bg,.5);
+  return mix(t.muted,t.bg,.55);
+}
+function linkBase(type,t){
+  if(type==='req')return mix(t.muted,t.bg,.45);
+  if(type==='rel')return mix(t.accent,t.bg,.2);
+  return mix(t.ink,t.bg,.6);
+}
+
+/* Which nodes and links the graph has, given the branch filter and the layers. */
+function graphData(map){
+  const nodes=[],ids=new Set(),links=[],seen=new Set();
+  map.nodes.forEach((n)=>{
+    if(!S.mapShow.has(n.branch))return;
+    ids.add(n.id);
+    nodes.push({id:n.id,kind:'concept',title:n.title,state:n.state,prog:n.prog,rusty:n.rusty,branch:n.branch,lessons:n.lessons.length});
+  });
+  const add=(a,b,type)=>{
+    if(a===b||!ids.has(a)||!ids.has(b))return;
+    const k=[a,b].sort().join('|');
+    if(seen.has(type+k)||(type==='rel'&&seen.has('req'+k)))return;
+    seen.add(type+k);links.push({source:a,target:b,type});
   };
-  list.filter(n=>!n.extra).forEach(dep);
-  let maxD=0;depth.forEach(v=>{maxD=Math.max(maxD,v);});
-  const hasCatalog=list.some(n=>!n.extra);
-  list.filter(n=>n.extra).forEach(n=>depth.set(n.id,hasCatalog?maxD+1:0));
-  const cols=new Map();
-  list.forEach(n=>{const d=depth.get(n.id);if(!cols.has(d))cols.set(d,[]);cols.get(d).push(n);});
-  const pos=new Map();let width=0,height=0;
-  [...cols.keys()].sort((a,b)=>a-b).forEach(d=>{
-    const col=cols.get(d);
-    const key=(n)=>{const ys=n.requires.filter(r=>pos.has(r)).map(r=>pos.get(r).y);return ys.length?ys.reduce((a,b)=>a+b,0)/ys.length:Infinity;};
-    const order=new Map(col.map((n,i)=>[n.id,i]));
-    if(d>0)col.sort((a,b)=>(key(a)-key(b))||(order.get(a.id)-order.get(b.id)));
-    col.forEach((n,i)=>{const x=d*(NW+GX),y=i*(NH+GY);pos.set(n.id,{x,y});width=Math.max(width,x+NW);height=Math.max(height,y+NH);});
+  if(S.mapLayers.req)map.nodes.forEach((n)=>n.requires.forEach((r)=>add(r,n.id,'req')));
+  if(S.mapLayers.proj){
+    Object.entries(projectsOf()).forEach(([slug,p])=>{
+      const pid='p:'+slug;
+      ids.add(pid);nodes.push({id:pid,kind:'project',title:p.name,lessons:p.lessons.length});
+      p.lessons.forEach((l)=>{
+        if(l.primer){const bid='l:'+l.id;ids.add(bid);nodes.push({id:bid,kind:'base',title:l.title,state:stateOf(l)});add(pid,bid,'proj');}
+        else add(pid,resolveNode(l.id)||l.id,'proj');
+      });
+    });
+  }
+  if(S.mapLayers.rel){
+    S.lessons.filter((l)=>!l.primer).forEach((l)=>{
+      const from=resolveNode(l.id)||l.id;
+      (l.related||[]).forEach((r)=>add(from,resolveNode(r)||r,'rel'));
+    });
+  }
+  const deg=new Map();
+  links.forEach((l)=>{deg.set(l.source,(deg.get(l.source)||0)+1);deg.set(l.target,(deg.get(l.target)||0)+1);});
+  nodes.forEach((n)=>{
+    const d=deg.get(n.id)||0;
+    n.size=n.kind==='project'?10+Math.min(d,12):n.kind==='base'?4:({descubierto:6,conocido:4,frontera:4}[n.state]||2)+Math.min(d,8)*.6;
   });
-  const edges=[];
-  list.forEach(n=>n.requires.forEach(r=>{if(inBranch.has(r))edges.push([r,n.id]);}));
-  return{list,pos,edges,width,height};
+  const adj=new Map(nodes.map((n)=>[n.id,new Set()]));
+  links.forEach((l)=>{adj.get(l.source).add(l.target);adj.get(l.target).add(l.source);});
+  return{nodes,links,adj};
 }
-function svgEl(tag,attrs){const e=document.createElementNS('http://www.w3.org/2000/svg',tag);Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v));return e;}
-const nodeLabel=(n)=>n.rusty?'Oxidado (perfil)':MAP_STATE_LABEL[n.state]+(n.prog==='oxidado'?' · oxidado':n.prog==='dominado'?' · dominado':'');
-function selectNode(id,map){
-  const n=map.nodes.get(id);if(!n)return;
-  S.mapNode=id;S.mapBranch=n.branch;render();
+
+function loadGraphLib(){
+  if(window.ForceGraph3D)return Promise.resolve();
+  if(!S.libPromise){
+    S.libPromise=new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src=GRAPH_LIB.url;s.integrity=GRAPH_LIB.integrity;s.crossOrigin='anonymous';s.async=true;
+      s.onload=()=>window.ForceGraph3D?res():rej(new Error('missing'));
+      s.onerror=()=>rej(new Error('load'));
+      document.head.append(s);
+    }).catch((e)=>{S.libPromise=null;throw e;});
+  }
+  return S.libPromise;
 }
-function mapGraph(branchId,map){
-  const L=layout(branchId,map);
-  const canvas=h('div',{class:'mapcanvas',style:`width:${L.width}px;height:${L.height}px`});
-  const svg=svgEl('svg',{width:L.width,height:L.height,'aria-hidden':'true'});
-  L.edges.forEach(([a,b])=>{
-    const pa=L.pos.get(a),pb=L.pos.get(b);
-    const x1=pa.x+NW,y1=pa.y+NH/2,x2=pb.x,y2=pb.y+NH/2,dx=GX*0.6;
-    const ok=(id)=>['descubierto','conocido'].includes(map.nodes.get(id).state);
-    svg.append(svgEl('path',{d:`M${x1} ${y1}C${x1+dx} ${y1} ${x2-dx} ${y2} ${x2} ${y2}`,class:'edge'+(ok(a)&&ok(b)?' on':'')}));
+
+function ensureBox(){
+  if(S.gbox)return;
+  S.gcanvas=h('div',{class:'graphcanvas'});
+  S.glabels=h('div',{class:'glabels','aria-hidden':'true'});
+  S.gbox=h('div',{class:'graphbox',role:'group','aria-label':'Grafo 3D de conceptos, lecciones y proyectos. Arrastra para girar, rueda o pellizco para acercar. La vista de lista tiene lo mismo en texto.'},S.gcanvas,S.glabels);
+}
+async function ensureGraph(){
+  if(S.graphState==='loading'||S.graphState==='ready')return;
+  S.graphState='loading';
+  try{await loadGraphLib();ensureBox();createGraph();S.graphState='ready';}
+  catch(e){S.graphState='error';}
+  render();
+}
+
+function fitGraph(){
+  const g=S.graph,el=S.gbox;
+  if(!g||!el||!el.clientWidth||!el.clientHeight)return;
+  g.width(el.clientWidth).height(el.clientHeight);
+}
+function pauseGraph(){if(S.graph&&!S.graphPaused){S.graph.pauseAnimation();S.graphPaused=true;}}
+function resumeGraph(){if(S.graph&&S.graphPaused){S.graph.resumeAnimation();S.graphPaused=false;}}
+
+function createGraph(){
+  const g=window.ForceGraph3D({controlType:'orbit',rendererConfig:{antialias:true,alpha:true}})(S.gcanvas)
+    .backgroundColor('rgba(0,0,0,0)').showNavInfo(false)
+    .nodeRelSize(3).nodeOpacity(.95).nodeResolution(14)
+    .linkOpacity(.75)
+    .warmupTicks(reducedMotion()?240:120).cooldownTicks(reducedMotion()?0:80)
+    .nodeLabel((n)=>escHtml(n.title)+(n.kind==='concept'?' · '+escHtml(nodeStateText(n)):n.kind==='project'?' · proyecto':' · lección base'))
+    .onNodeClick((n)=>selectNode(n.id))
+    .onNodeHover((n)=>{S.hoverId=n?n.id:null;S.gcanvas.style.cursor=n?'pointer':'';paintGraph();updateLabels();})
+    .onBackgroundClick(()=>{if(S.mapNode){S.mapNode=null;render();}})
+    .onEngineTick(updateLabels)
+    .onEngineStop(()=>{if(S.graphFit){S.graphFit=false;g.zoomToFit(reducedMotion()?0:500,70);}updateLabels();});
+  try{g.d3Force('charge').strength(-70);g.d3Force('link').distance((l)=>l.type==='proj'?46:l.type==='rel'?52:34);}catch(e){}
+  g.controls().addEventListener('change',updateLabels);
+  if(window.ResizeObserver)new ResizeObserver(()=>{fitGraph();updateLabels();}).observe(S.gbox);
+  S.graph=g;S.graphPaused=false;S.gpos=new Map();
+  const onTheme=()=>{paintGraph();};
+  if(window.matchMedia)matchMedia('(prefers-color-scheme: dark)').addEventListener('change',onTheme);
+  new MutationObserver(onTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+}
+function nodeStateText(n){return n.rusty?'Oxidado (perfil)':MAP_STATE_LABEL[n.state]+(n.prog==='oxidado'?' · oxidado':n.prog==='dominado'?' · dominado':'');}
+
+/* Colors, sizes and dimming follow the focused node (hovered or selected), like Obsidian's graph. */
+function paintGraph(){
+  const g=S.graph;if(!g)return;
+  const t=themeTokens();
+  const f=S.hoverId||S.mapNode;
+  const near=f&&S.adj?S.adj.get(f):null;
+  const lit=(id)=>!f||id===f||(near&&near.has(id));
+  g.nodeColor((n)=>{const c=baseColor(n,t);return lit(n.id)?c:mix(c,t.bg,.8);})
+   .nodeVal((n)=>n.id===S.mapNode?n.size*2:n.size)
+   .linkColor((l)=>{const a=idOf(l.source),b=idOf(l.target),c=linkBase(l.type,t);return !f||a===f||b===f?c:mix(c,t.bg,.85);})
+   .linkWidth((l)=>{const a=idOf(l.source),b=idOf(l.target);return f&&(a===f||b===f)?1.8:l.type==='req'?.5:.9;});
+}
+
+/* Push the current data into the graph, keeping the positions nodes already had. */
+function syncGraph(map){
+  const g=S.graph;if(!g)return;
+  const data=graphData(map);
+  const sig=data.nodes.map((n)=>[n.id,n.state,n.prog,n.rusty,Math.round(n.size*10)].join(':')).join(',')+'|'+data.links.map((l)=>l.type+idOf(l.source)+'>'+idOf(l.target)).join(',');
+  if(sig===S.graphSig){paintGraph();return;}
+  (S.graphNodes||[]).forEach((n)=>{if(n.x!==undefined)S.gpos.set(n.id,{x:n.x,y:n.y,z:n.z});});
+  data.nodes.forEach((n)=>{const p=S.gpos.get(n.id);if(p)Object.assign(n,p);});
+  S.graphSig=sig;S.graphNodes=data.nodes;S.adj=data.adj;S.graphFit=!S.gpos.size;
+  g.graphData({nodes:data.nodes,links:data.links});
+  paintGraph();
+}
+
+function focusNode(id){
+  const g=S.graph,n=(S.graphNodes||[]).find((x)=>x.id===id);
+  if(!g||!n||n.x===undefined)return;
+  const r=1+90/(Math.hypot(n.x,n.y,n.z)||1);
+  g.cameraPosition({x:n.x*r,y:n.y*r,z:n.z*r},n,reducedMotion()?0:900);
+}
+
+/* HTML labels over the canvas: crisp text without loading a second 3D library. */
+function updateLabels(){
+  const g=S.graph,box=S.glabels,el=S.gbox;
+  if(!g||!box||!el||!S.graphNodes||S.graphPaused)return;
+  const cam=g.camera(),pos=cam.position,dir=pos.clone();
+  cam.getWorldDirection(dir);
+  const f=S.hoverId||S.mapNode,near=f&&S.adj?S.adj.get(f):null;
+  const want=[];
+  S.graphNodes.forEach((n)=>{
+    if(n.x===undefined)return;
+    let w=0;
+    if(n.id===f)w=3;
+    else if(near&&near.has(n.id))w=2;
+    else if(n.kind!=='concept'||n.state==='descubierto'||n.state==='frontera')w=1;
+    if(!w)return;
+    const dx=n.x-pos.x,dy=n.y-pos.y,dz=n.z-pos.z;
+    if(dx*dir.x+dy*dir.y+dz*dir.z<=0)return;
+    want.push({n,w,d:Math.hypot(dx,dy,dz)});
   });
-  canvas.append(svg);
-  L.list.forEach(n=>{
-    const p=L.pos.get(n.id);
-    canvas.append(h('button',{type:'button',class:'node '+n.state+(n.prog==='oxidado'||n.rusty?' oxidado':''),style:`left:${p.x}px;top:${p.y}px;width:${NW}px;height:${NH}px`,title:n.title,'aria-pressed':String(S.mapNode===n.id),onclick:()=>{S.mapNode=n.id;render();}},
-      h('span',{class:'nt'},n.title),h('small',{},nodeLabel(n))));
+  want.sort((a,b)=>b.w-a.w||a.d-b.d);
+  const W=el.clientWidth,H=el.clientHeight,placed=[],use=[];
+  for(const u of want){
+    if(use.length>=MAX_LABELS)break;
+    const p=g.graph2ScreenCoords(u.n.x,u.n.y,u.n.z);
+    if(p.x<-40||p.x>W+40||p.y<-20||p.y>H+20)continue;
+    const wpx=u.n.title.length*(u.w===3?7.2:6.2),x0=p.x-wpx/2,y0=p.y+12,r={x0,x1:x0+wpx,y0,y1:y0+15};
+    if(u.w<3&&placed.some((q)=>r.x0<q.x1&&r.x1>q.x0&&r.y0<q.y1&&r.y1>q.y0))continue;
+    placed.push(r);use.push({u,p});
+  }
+  while(box.children.length<use.length)box.append(h('span',{class:'glabel'}));
+  [...box.children].forEach((span,i)=>{
+    const it=use[i];
+    if(!it){span.style.display='none';return;}
+    span.style.display='';
+    span.className='glabel w'+it.u.w;
+    if(span.textContent!==it.u.n.title)span.textContent=it.u.n.title;
+    span.style.transform='translate('+Math.round(it.p.x)+'px,'+Math.round(it.p.y)+'px) translate(-50%,12px)';
   });
-  return h('div',{class:'mapwrap'},canvas);
 }
+
+function selectNode(id){
+  S.mapNode=id;render();
+  if(S.mapView==='grafo')focusNode(id);
+}
+
 async function explainNode(n){
   const prev=S.explain[n.id];if(prev&&prev.busy)return;
   const st=S.explain[n.id]={busy:true,text:'',error:'',ctl:new AbortController()};
@@ -1045,35 +1203,118 @@ function mapPanel(map){
   }
   return root;
 }
+function projectPanel(slug){
+  const p=projectsOf()[slug];
+  if(!p)return h('div',{class:'panel'},h('p',{class:'note'},'Ese proyecto ya no tiene lecciones.'));
+  const info=projectInfo(p,S.projectsMem[slug]);
+  const root=h('div',{class:'panel'});
+  root.append(h('div',{class:'tags'},h('span',{class:'tag'},'Proyecto'),info.kind?h('span',{class:'tag'},KIND_LABEL[info.kind]||info.kind):null,
+    info.langs.map(x=>h('span',{class:'tag'},x)),info.fws.map(x=>h('span',{class:'tag'},x))),
+    h('h3',{style:'margin-top:8px'},info.name));
+  if(info.about)root.append(h('p',{class:'sub',style:'margin:4px 0 0'},info.about));
+  if(info.primer.length)root.append(h('div',{class:'label'},'Empieza aquí'),h('ul',{class:'pc-lessons'},info.primer.map(l=>h('li',{},lessonLink(l)))));
+  if(info.lessons.length)root.append(h('div',{class:'label'},'Lecciones de commits'),h('ul',{class:'pc-lessons'},info.lessons.map(l=>h('li',{},lessonLink(l)))));
+  return root;
+}
+function basePanel(lessonId){
+  const l=S.lessons.find(x=>x.id===lessonId);
+  if(!l)return h('div',{class:'panel'},h('p',{class:'note'},'Esa lección ya no está.'));
+  const root=h('div',{class:'panel'});
+  root.append(h('div',{class:'tags'},h('span',{class:'tag'},'Lección base'),h('span',{class:'tag'},l.projectName||l.project),h('span',{class:'pill '+stateOf(l)},STATE_LABEL[stateOf(l)])),
+    h('h3',{style:'margin-top:8px'},l.title));
+  if(l.context&&l.context.learning)root.append(h('p',{class:'sub',style:'margin:4px 0 12px'},l.context.learning));
+  root.append(h('a',{class:'btn primary',href:'#leccion/'+encodeURIComponent(l.id)},'Abrir lección'));
+  return root;
+}
+function selectionPanel(map){
+  const id=S.mapNode;
+  if(!id)return h('div',{class:'panel'},h('p',{class:'note'},'Elige un nodo para ver qué es, de qué depende y tus lecciones.'));
+  if(id.startsWith('p:'))return projectPanel(id.slice(2));
+  if(id.startsWith('l:'))return basePanel(id.slice(2));
+  return mapPanel(map);
+}
+
+function mapList(map){
+  const groups=[['frontera','Tu frontera'],['descubierto','Descubiertos'],['conocido','Ya los conoces'],['sin-explorar','Sin explorar']];
+  const vis=[...map.nodes.values()].filter(n=>S.mapShow.has(n.branch));
+  const box=h('div');
+  groups.forEach(([st,label])=>{
+    const items=vis.filter(n=>n.state===st);
+    if(!items.length)return;
+    box.append(h('div',{class:'label'},label+' · '+items.length),
+      h('div',{class:'nodelist'},items.map(n=>h('button',{class:'chip',type:'button','aria-pressed':String(S.mapNode===n.id),onclick:()=>selectNode(n.id)},n.title))));
+  });
+  return box;
+}
+
+function mapViewToggle(){
+  const b=(m,t)=>h('button',{class:'chip',type:'button','aria-pressed':String(S.mapView===m),onclick:()=>setMapView(m)},t);
+  return h('div',{class:'seg',role:'group','aria-label':'Cómo ver el mapa'},b('grafo','Grafo 3D'),b('lista','Lista'));
+}
+function setMapView(m){
+  if(!MAP_VIEWS.includes(m)||S.mapView===m)return;
+  S.mapView=m;S.viewTouched=true;lsSet(LS_MAPVIEW,m);render();savePrefs();
+}
+function graphStatus(){
+  if(S.graphState==='error'){
+    return h('div',{class:'empty'},h('b',{},S.graphWhy==='webgl'?'Tu navegador no puede dibujar el grafo 3D':'No se pudo cargar el grafo 3D'),
+      'Mientras tanto tienes el mapa en lista, más abajo.',
+      S.graphWhy==='webgl'?null:h('div',{},h('button',{class:'btn',type:'button',onclick:()=>{S.graphState='idle';S.graphWhy='';render();}},'Reintentar')));
+  }
+  return h('div',{class:'empty'},h('b',{},'Cargando el grafo…'),'Se descarga una sola vez.');
+}
+
 function viewMapa(){
   const map=computeMap();
+  if(!S.mapTouched){S.mapChips=new Set(map.relevant);S.mapShow=new Set(map.relevant);}
+  if(S.mapNode&&!S.mapNode.includes(':')){const n=map.nodes.get(S.mapNode);if(!n||!S.mapShow.has(n.branch))S.mapNode=null;}
   const root=h('div',{style:'padding-top:12px'});
-  root.append(h('h2',{},'Mapa'),h('p',{class:'sub'},'Lo que ya has visto, lo que tienes al lado y lo que aún no has explorado. Las ramas salen de tus proyectos.'));
-  if(!BRANCH_BY_ID.has(S.mapBranch))S.mapBranch='universal';
-  const inBranch=CATALOG.nodes.filter(n=>n.branch===S.mapBranch).map(n=>n.id);
-  if(!S.mapNode||!map.nodes.has(S.mapNode)||map.nodes.get(S.mapNode).branch!==S.mapBranch){
-    S.mapNode=inBranch.find(id=>map.nodes.get(id).state==='frontera')||inBranch[0]||null;
-  }
-  const rel=CATALOG.branches.filter(b=>map.relevant.has(b.id));
-  const others=CATALOG.branches.filter(b=>!map.relevant.has(b.id));
+  root.append(h('div',{class:'viewhead'},
+    h('div',{},h('h2',{},'Mapa'),h('p',{class:'sub'},'Tus conceptos, tus lecciones y tus proyectos como una red. Lo que brilla ya lo has visto, lo tenue está por explorar.')),
+    mapViewToggle()));
+
   const bar=h('div',{class:'mapbar',role:'group','aria-label':'Ramas'});
-  rel.forEach(b=>{const c=map.byBranch[b.id];bar.append(h('button',{class:'chip',type:'button','aria-pressed':String(S.mapBranch===b.id),onclick:()=>{S.mapBranch=b.id;S.mapNode=null;render();}},`${b.label} ${c.disc}/${c.total}`));});
+  CATALOG.branches.filter(b=>S.mapChips.has(b.id)).forEach(b=>{
+    const c=map.byBranch[b.id];
+    bar.append(h('button',{class:'chip',type:'button','aria-pressed':String(S.mapShow.has(b.id)),onclick:()=>{
+      S.mapTouched=true;S.mapShow.has(b.id)?S.mapShow.delete(b.id):S.mapShow.add(b.id);render();
+    }},`${b.label} ${c.disc}/${c.total}`));
+  });
+  const others=CATALOG.branches.filter(b=>!S.mapChips.has(b.id));
   if(others.length){
-    const sel=h('select',{id:'map-more','aria-label':'Explorar otra rama',onchange:(ev)=>{if(ev.target.value){S.mapBranch=ev.target.value;S.mapNode=null;render();}}},
-      h('option',{value:''},'Explorar otra rama…'),others.map(b=>h('option',{value:b.id},`${b.label} (${b.type})`)));
-    sel.value=others.some(b=>b.id===S.mapBranch)?S.mapBranch:'';
+    const sel=h('select',{id:'map-more','aria-label':'Añadir otra rama',onchange:(ev)=>{
+      if(ev.target.value){S.mapTouched=true;S.mapChips.add(ev.target.value);S.mapShow.add(ev.target.value);render();}
+    }},h('option',{value:''},'Añadir otra rama…'),others.map(b=>h('option',{value:b.id},`${b.label} (${b.type})`)));
     bar.append(sel);
   }
   root.append(bar);
+
+  if(S.mapView==='grafo'){
+    root.append(h('div',{class:'mapbar',role:'group','aria-label':'Capas del grafo'},
+      [['req','Prerrequisitos'],['rel','Relacionadas'],['proj','Proyectos']].map(([k,t])=>
+        h('button',{class:'chip',type:'button','aria-pressed':String(S.mapLayers[k]),onclick:()=>{S.mapLayers[k]=!S.mapLayers[k];render();}},t))));
+  }
+
   const fr=map.frontier.slice(0,6);
   if(fr.length){
-    root.append(h('div',{class:'label',style:'margin-top:0'},'Tu frontera'),h('div',{class:'nodelist',style:'margin-bottom:14px'},fr.map(id=>h('button',{class:'chip',type:'button',onclick:()=>selectNode(id,map)},NODE_BY_ID.get(id).title))));
+    root.append(h('div',{class:'label',style:'margin-top:0'},'Tu frontera'),h('div',{class:'nodelist',style:'margin-bottom:14px'},fr.map(id=>h('button',{class:'chip',type:'button',onclick:()=>selectNode(id)},NODE_BY_ID.get(id).title))));
   }
-  const c=map.byBranch[S.mapBranch];
-  const br=BRANCH_BY_ID.get(S.mapBranch);
-  root.append(h('p',{class:'mapsum'},`${br.label}: ${c.disc} ${c.disc===1?'conocido':'conocidos'}, ${c.front} en la frontera, ${c.total-c.disc-c.front} sin explorar.`));
-  root.append(h('div',{class:'legend'},[['descubierto','Descubierto'],['conocido','Ya lo conoces'],['frontera','Frontera'],['sin-explorar','Sin explorar']].map(([k,t])=>h('span',{},h('i',{class:k}),t))));
-  root.append(mapGraph(S.mapBranch,map),mapPanel(map));
+  let disc=0,front=0,total=0;
+  map.nodes.forEach(n=>{if(!S.mapShow.has(n.branch))return;total++;if(n.state==='descubierto'||n.state==='conocido')disc++;if(n.state==='frontera')front++;});
+  root.append(h('p',{class:'mapsum'},`${disc} ${disc===1?'concepto conocido':'conceptos conocidos'}, ${front} en la frontera, ${total-disc-front} sin explorar.`));
+  root.append(h('div',{class:'legend'},[['descubierto','Descubierto'],['conocido','Ya lo conoces'],['frontera','Frontera'],['sin-explorar','Sin explorar'],['proyecto','Proyecto'],['base','Lección base']].map(([k,t])=>h('span',{},h('i',{class:k}),t))));
+
+  if(S.mapView==='grafo'){
+    if(S.webgl===undefined)S.webgl=hasWebGL();
+    if(!S.webgl){S.graphState='error';S.graphWhy='webgl';}
+    else if(S.graphState==='idle')ensureGraph();
+    if(S.graphState==='ready'){
+      syncGraph(map);
+      root.append(S.gbox,h('p',{class:'note'},'Arrastra para girar, rueda o pellizco para acercar. Toca un nodo para ver su detalle.'));
+    }else root.append(graphStatus());
+    if(S.graphState==='error')root.append(mapList(map));
+  }else root.append(mapList(map));
+  root.append(h('div',{style:'margin-top:14px'},selectionPanel(map)));
   return root;
 }
 
@@ -1096,6 +1337,7 @@ function render(){
     h('a',{href:'#'+id,'aria-current':(cur===id||(id==='lecciones'&&cur==='leccion'))?'page':null},label,n?h('span',{class:'n'},String(n)):null)));
   document.getElementById('view').replaceChildren(VIEWS[cur]());
   paintToast();
+  if(cur==='mapa'&&S.mapView==='grafo'&&S.graphState==='ready'){resumeGraph();requestAnimationFrame(()=>{fitGraph();updateLabels();});}else pauseGraph();
 }
 window.addEventListener('hashchange',()=>{S.toast='';render();if(location.hash==='#instalar'){const e=document.getElementById('instalar');if(e)e.scrollIntoView();}else window.scrollTo(0,0);});
 
@@ -1124,6 +1366,7 @@ async function boot(){
       snap.docs.forEach(d=>{if(d.id.startsWith('p_'))p[d.id.slice(2)]=d.data();else if(d.id==='profile')prof=d.data();else if(d.id==='prefs')prefs=d.data();});
       S.progress=p;S.progressLoaded=true;
       if(prefs&&!S.modeTouched&&FEED_MODES.includes(prefs.feedMode)){S.feedMode=prefs.feedMode;lsSet(LS_FEED,prefs.feedMode);}
+      if(prefs&&!S.viewTouched&&MAP_VIEWS.includes(prefs.mapView)){S.mapView=prefs.mapView;lsSet(LS_MAPVIEW,prefs.mapView);}
       if(prof){S.profile=prof;if(!S.draft||S.saved)S.draft=null;}
       render();
     },()=>{S.progressLoaded=true;render();});

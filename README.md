@@ -6,7 +6,7 @@ Most of your code will be written by AI. What you need is the ability to read it
 
 Nothing interrupts your work. The lessons wait until you open the study space.
 
-> Status: prototype (v0.8.0). The study space is in Spanish for now.
+> Status: prototype (v0.9.0). The study space is in Spanish for now.
 
 ## Requirements
 
@@ -132,7 +132,15 @@ Lessons answer "what did I learn in this commit". The map answers "where am I, a
 - **Discovered**: a lesson of yours covers it.
 - **You know it**: you marked it in the diagnostic. A topic you marked as rusty counts as known and is flagged.
 - **Frontier**: you have everything it needs and it belongs to one of your branches. This is what to learn next, and the dashboard suggests it when nothing else is pending.
-- **Unexplored**: the rest. Branches your repos do not touch stay in the fog, but you can open any of them from "Explorar otra rama".
+- **Unexplored**: the rest. Branches your repos do not touch are hidden at first, but you can add any of them.
+
+The map is drawn as a **3D graph**, like Obsidian's graph view: nodes that you can orbit, zoom and click, with the ones you have seen lit up and the unexplored ones dim.
+
+- **Nodes** are concepts, your repos (as larger nodes) and the base lessons of each repo.
+- **Links** come in three layers you can switch on and off: prerequisites between concepts, lessons that are related to each other, and the repo each lesson was taught in. A repo pulls its concepts into a cluster, so you can see what each project taught you and where projects overlap.
+- **Hover or select** a node and the rest dims, leaving it and its neighbours lit, with their names written next to them. More names appear as you zoom in.
+- **Branch chips** choose which branches are drawn. Your own branches are on by default, and "Añadir otra rama" brings in the rest.
+- **List view** shows the same concepts as text grouped by state. It is the way in for keyboard and screen-reader users, and it is what you get when the browser cannot do WebGL or the graph library cannot load. The choice between graph and list is remembered.
 
 Pick a concept to see what it is, what you need before it, what it opens the way to and your lessons about it. "Explorar con Claude" explains any concept on demand, even an unexplored one. That uses your own Claude usage and is never run on its own.
 
@@ -171,7 +179,7 @@ Open exercises are graded against key points by Claude, using the Artifact's ask
 - **Lecciones**: a switch at the side of the title alternates two views, and the study space remembers the last one you used. By lesson, with filters by project, kind, language, area and state, grouped by commit. By project, a vertical stack of cards with the project's kind and languages, its summary, the base lessons ("Empieza aquí"), the core concepts, number of lessons and commits, progress, tags of what you learn in it, its structure and the list of its lessons. Every lesson opens on its own page.
 - **Repaso**: spaced review with intervals of 1, 3, 7, 16 and 35 days. A concept you got wrong goes back to the start; a partly right one stays where it is.
 - **Conceptos**: everything you have seen, with its state and in how many projects it appeared. A concept has one state, shared by all your projects.
-- **Mapa**: a map of what you have discovered, what is next to it and what is unexplored (see "The map" above).
+- **Mapa**: a 3D graph of what you have discovered, what is next to it and what is unexplored, with your repos and base lessons as nodes (see "The map" above).
 - **Perfil**: your exercise choices, with the button to change them.
 
 States: new, learning, rusty (due for review), mastered.
@@ -227,6 +235,9 @@ To pause the plugin everywhere, create an empty file `~/.learn-by-doing/off`, or
 - The catalog covers common concepts only. A language or framework that is not in it has no branch yet, so its lessons show up as extra nodes in the universal branch.
 - If two concepts mean the same thing under different names, they are kept apart. The skill is told to reuse existing names, which prevents most of it.
 - If you edit a note so that it no longer follows the format, the script skips it with a warning instead of syncing it.
+
+- The 3D graph needs WebGL and loads one script (`3d-force-graph`, pinned to a version and checked with an integrity hash) from jsDelivr the first time the map opens. Nothing of yours is sent to it. If it cannot load, the map falls back to the list view.
+- The graph only grows interesting with several repos and lessons. With a handful it is a small cluster, and lessons link to each other only through the `related` field and shared repos.
 
 ## Ideas for later
 
