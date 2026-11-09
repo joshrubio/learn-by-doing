@@ -70,17 +70,36 @@ The study space draws a map of what the learner has discovered, what is next to 
 
 ## Every lesson has the same spine
 
-Context, predict, concept, one exercise, result. The only part that varies is the exercise, and there is exactly one per lesson.
+Introduction, context, predict, concept, one exercise, result. The only part that varies is the exercise, and there is exactly one per lesson.
 
-0. `context`, three short plain-language sentences for someone who has not looked at the commit:
+The learner may open a lesson weeks after the commit, so the page starts by placing them in the project before any code.
+
+0. `intro`, required, in the user's language. It is the first thing on the page, above the context:
+   - `project`: what the repo is, one or two sentences a stranger would understand ("A booking API for a small clinic, built with Express"). Take it from the README, the manifest or the code, never invent it. Keep it stable across lessons of the same repo.
+   - `where`: where the change lives and what it touches, one or two sentences: the folder or layer, its neighbours, who calls it ("It lives in `src/routes`, the layer that receives HTTP requests and hands them to services").
+   - `diagram`, optional: a plain-text map, only when the change spans several pieces or a flow and a picture says it faster than words. Boxes and arrows in ASCII, at most 16 lines and 64 columns, no tabs. Mark the part that changed with `<== here`. Leave it out for a change inside one file, never draw a decorative one.
+
+   Example of a diagram:
+
+   ```
+   +---------+     +-----------+     +----------+
+   | route   | --> | service   | --> | database |
+   +---------+     +-----------+     +----------+
+                        ^
+                        '-- <== here: new validation
+   ```
+
+   `intro` is about the whole project and the place of the change. `context`, next, is about the feature of this commit. Do not repeat one in the other.
+
+1. `context`, three short plain-language sentences for someone who has not looked at the commit:
    - `building`: what the commit or feature was building, in product terms, never a restatement of the diff.
    - `snippetRole`: what this snippet does inside that, in one sentence.
    - `learning`: the one concept this lesson teaches, as a promise to the reader.
    The project name is added automatically. The `title` names the concept, not the file.
-1. `code`: the user's real code, at most 15 lines, only the lines that illustrate the concept. Never paste the whole diff.
-2. `predict`: one short question to think about before reading the explanation.
-3. `explain`: the concept in 3 or 4 lines, as a mental model and not a textbook definition.
-4. `exercise`: one exercise, chosen as below.
+2. `code`: the user's real code, at most 15 lines, only the lines that illustrate the concept. Never paste the whole diff.
+3. `predict`: one short question to think about before reading the explanation.
+4. `explain`: the concept in 3 or 4 lines, as a mental model and not a textbook definition.
+5. `exercise`: one exercise, chosen as below.
 
 ## Choosing the exercise
 
@@ -126,6 +145,15 @@ Call the `save_lessons` tool of the learn-by-doing MCP server. Never use shell c
       "concept": "separation-of-concerns",
       "scope": "universal",
       "title": "Why the route does not talk to the database directly",
+      "intro": {
+        "project": "A booking API for a small clinic, built with Express.",
+        "where": "It lives in src/routes, the layer that receives HTTP requests and hands them to services.",
+        "diagram": "+--------+     +---------+     +----+
+| route  | --> | service | --> | db |
++--------+     +---------+     +----+
+    ^
+    <== here"
+      },
       "context": {
         "building": "A login endpoint so users can sign in with email and password.",
         "snippetRole": "This is the route that receives the login request and answers with the user or an error.",

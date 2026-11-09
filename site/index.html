@@ -31,7 +31,7 @@ h3{font-size:1.1rem}
 p{margin:0}
 a{color:var(--accent)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-code,pre,.mono{font-family:var(--font-mono)}
+code,pre,.mono{font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:"liga" 0,"calt" 0}
 header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-block:18px}
 .brand{font:700 1.15rem var(--font-display);text-decoration:none;color:var(--ink);letter-spacing:-.01em}
 .brand span{color:var(--accent)}
@@ -168,6 +168,32 @@ legend{font:600 1rem var(--font-display);padding:0 6px}
 .pill.sin-explorar{border-style:dotted}
 .nodelist{display:flex;gap:8px;flex-wrap:wrap}
 .explain{white-space:pre-wrap;background:var(--code);border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:10px;font-size:.92rem}
+.viewhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.viewhead .seg{flex:none;padding-top:2px}
+.lesson.card{display:block;padding:14px 16px;color:inherit;text-decoration:none}
+.lesson.card:hover{border-color:var(--accent)}
+.learn-line{margin:6px 0 0;color:var(--muted);font-size:.92rem}
+.back{display:inline-flex;align-items:center;min-height:36px;margin-bottom:6px;font-size:.92rem;color:var(--muted);text-decoration:none}
+.back:hover{color:var(--accent)}
+.lessonpage{max-width:720px}
+.lessonpage h1{font-size:clamp(1.6rem,4.5vw,2.2rem);letter-spacing:-.01em;margin:10px 0 4px}
+.commitline{font:.78rem var(--font-mono);color:var(--muted);overflow-wrap:anywhere}
+.intro{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;background:var(--surface);padding:2px 16px 16px;margin:16px 0 4px}
+.diagram{font-size:.8rem;line-height:1.3;margin:6px 0 0}
+.pstack{display:grid;gap:14px}
+.pcard{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.pc-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pc-head h3{font-size:1.25rem}
+.pc-about{color:var(--muted);margin:8px 0 10px}
+.pc-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px;margin:14px 0 6px}
+.pc-stats b{display:block;font:600 1.4rem var(--font-display);font-variant-numeric:tabular-nums}
+.pc-stats span{color:var(--muted);font-size:.82rem}
+.pcard details{margin-top:12px}
+.pcard summary{cursor:pointer;color:var(--accent);font-size:.9rem;min-height:36px;display:flex;align-items:center}
+.pc-lessons{list-style:none;margin:4px 0 0;padding:0}
+.pc-lessons a{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line);color:var(--ink);text-decoration:none}
+.pc-lessons a:hover span:first-child{color:var(--accent)}
+.tag.concept{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 footer{margin-top:56px;color:var(--muted);font-size:.85rem}
 @media (max-width:560px){.cta .btn{flex:1 1 100%}.hero{padding-top:36px}}
 @media (prefers-reduced-motion:no-preference){.btn,.chip,.opt{transition:border-color .15s,background .15s}}
@@ -221,8 +247,14 @@ const DIAG=[
 const LEVEL_Q='En un programa con una ruta web, un servicio y una base de datos, ¿por qué se separan esas tres piezas en vez de ponerlo todo junto? Responde con tus palabras.';
 const LEVEL_KEYS=['Cada pieza tiene una responsabilidad','Se puede cambiar una sin romper las otras','Facilita probar y entender cada parte'];
 
+const FEED_MODES=['lecciones','proyectos'];
+const LS_FEED='lbd-feed-mode';
+function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+
 const S={lessons:[],apps:[],progress:{},profile:null,db:null,sample:null,uid:null,loaded:false,progressLoaded:false,slow:false,noDb:false,
-  open:null,guess:{},revealed:{},ex:{},toast:'',reviewIds:null,
+  guess:{},revealed:{},ex:{},toast:'',reviewIds:null,
+  feedMode:FEED_MODES.includes(lsGet(LS_FEED))?lsGet(LS_FEED):'lecciones',modeTouched:false,
   filters:{project:'todos',area:'todas',state:'todos',kind:'todos',lang:'todos'},
   draft:null,diag:{},levelAns:'',levelRes:null,levelBusy:false,reco:null,saved:false,editing:false,skipSetup:false,
   mapBranch:'universal',mapNode:null,explain:{}};
@@ -386,30 +418,52 @@ function contextBlock(l){
     h('div',{class:'label'},'Qué se estaba construyendo'),h('div',{},x.building),
     h('div',{class:'label'},'Qué vas a aprender'),h('div',{class:'learn'},x.learning));
 }
-function fullLesson(l){
-  const box=h('div',{class:'detail'});
-  box.append(contextBlock(l)||'');
-  box.append(h('div',{class:'label'},'El código'));
-  if(l.context)box.append(h('div',{class:'role'},l.context.snippetRole));
-  box.append(codeBlock(l.code));
-  box.append(h('div',{class:'label'},'Antes de leer, predice'),h('div',{class:'q'},l.predict));
+function introBlock(l){
+  const n=l.intro;
+  if(!n)return null;
+  return h('section',{class:'intro','aria-label':'Introducción'},
+    h('div',{class:'label'},'El proyecto · '+(l.projectName||l.project)),h('div',{},n.project),
+    n.where?h('div',{class:'label'},'Dónde está el cambio'):null,n.where?h('div',{},n.where):null,
+    n.diagram?h('div',{class:'label'},'Mapa'):null,
+    n.diagram?h('pre',{class:'diagram',tabindex:'0','aria-label':'Mapa del cambio, en texto'},n.diagram):null);
+}
+function lessonCard(l){
+  const learn=l.context&&l.context.learning;
+  return h('a',{class:'lesson card',href:'#leccion/'+encodeURIComponent(l.id)},tags(l),h('h3',{},l.title),learn?h('p',{class:'learn-line'},learn):null);
+}
+function currentLessonId(){
+  const rest=(location.hash||'').slice(1).split('/').slice(1).join('/');
+  try{return decodeURIComponent(rest);}catch(e){return rest;}
+}
+const goFeed=()=>{location.hash='#lecciones';};
+function viewLeccion(){
+  const root=h('div',{class:'lessonpage',style:'padding-top:12px'});
+  root.append(h('a',{class:'back',href:'#lecciones'},'← Volver a las lecciones'));
+  const l=S.lessons.find(x=>x.id===currentLessonId());
+  if(!l){
+    root.append(S.loaded
+      ?h('div',{class:'empty'},h('b',{},'No encuentro esa lección'),'Puede que se haya borrado o que aún no se haya sincronizado con /study.',h('div',{},h('a',{class:'btn',href:'#lecciones'},'Ver mis lecciones')))
+      :emptyState());
+    return root;
+  }
+  const c=l.commit||{};
+  root.append(tags(l),h('h1',{},l.title),
+    c.hash?h('div',{class:'commitline'},'commit '+c.hash+(c.message?' · '+c.message:'')):null,
+    introBlock(l),contextBlock(l)||'');
+  root.append(h('div',{class:'label'},'El código'));
+  if(l.context)root.append(h('div',{class:'role'},l.context.snippetRole));
+  root.append(codeBlock(l.code));
+  root.append(h('div',{class:'label'},'Antes de leer, predice'),h('div',{class:'q'},l.predict));
   const ta=h('textarea',{id:'guess-'+l.id,placeholder:'Escribe tu predicción',oninput:(ev)=>{S.guess[l.id]=ev.target.value}});
   ta.value=S.guess[l.id]||'';
-  box.append(ta);
+  root.append(ta);
   if(!S.revealed[l.id]){
-    box.append(h('button',{class:'btn primary',type:'button',style:'margin-top:8px',onclick:()=>{S.revealed[l.id]=true;render();}},'Ver la explicación'));
+    root.append(h('button',{class:'btn primary',type:'button',style:'margin-top:8px',onclick:()=>{S.revealed[l.id]=true;render();}},'Ver la explicación'));
   }else{
-    box.append(h('div',{class:'label'},'El concepto'),h('div',{},l.explain),exerciseBlock(l,render));
-    if(l.related&&l.related.length)box.append(h('div',{class:'label'},'Relacionado'),h('div',{class:'tags'},l.related.map(r=>h('span',{class:'tag'},r))));
+    root.append(h('div',{class:'label'},'El concepto'),h('div',{},l.explain),exerciseBlock(l,goFeed));
+    if(l.related&&l.related.length)root.append(h('div',{class:'label'},'Relacionado'),h('div',{class:'tags'},l.related.map(r=>h('span',{class:'tag'},r))));
   }
-  return box;
-}
-function lessonItem(l){
-  const open=S.open===l.id;
-  const item=h('article',{class:'lesson'});
-  item.append(h('button',{class:'head',type:'button','aria-expanded':String(open),onclick:()=>{S.open=open?null:l.id;render();}},tags(l),h('h3',{},l.title)));
-  if(open)item.append(fullLesson(l));
-  return item;
+  return root;
 }
 
 /* ---------- views ---------- */
@@ -470,7 +524,7 @@ function dashboard(){
   const fresh=sorted().filter(l=>stateOf(l)==='nuevo');
   if(S.progressLoaded&&!S.profile)next.append(h('p',{},'Aún no has elegido cómo quieres aprender. Con tu perfil, las próximas lecciones llevarán los ejercicios de tu estilo.'),h('a',{class:'btn primary',href:'#perfil'},'Elegir mis ejercicios'));
   else if(due.length)next.append(h('p',{},`${due.length} ${due.length===1?'concepto se ha oxidado':'conceptos se han oxidado'}. Un repaso corto los devuelve a la memoria.`),h('a',{class:'btn primary',href:'#repaso'},'Repasar ahora'));
-  else if(fresh.length)next.append(h('p',{},`Empieza por: ${fresh[0].title}`),h('a',{class:'btn primary',href:'#lecciones',onclick:()=>{S.open=fresh[0].id}},'Abrir lección'));
+  else if(fresh.length)next.append(h('p',{},`Empieza por: ${fresh[0].title}`),h('a',{class:'btn primary',href:'#leccion/'+encodeURIComponent(fresh[0].id)},'Abrir lección'));
   else{
     const fr=computeMap().frontier.slice(0,3).map(id=>NODE_BY_ID.get(id).title);
     next.append(h('p',{},fr.length?'Estás al día. En tu frontera: '+fr.join(', ')+'.':'Estás al día. Haz otro commit con Claude y vuelve cuando haya lecciones nuevas.'),fr.length?h('a',{class:'btn primary',href:'#mapa'},'Ver el mapa'):null);
@@ -482,7 +536,7 @@ function dashboard(){
       h('div',{class:'bar',role:'img','aria-label':`${p.name}: ${c.dominado} de ${p.lessons.length} dominadas`},Object.keys(c).map(k=>h('i',{style:`width:${c[k]/p.lessons.length*100}%;background:${STATE_COLOR[k]}`}))));
   });
   const recent=h('div',{class:'panel'},h('h3',{},'Lecciones recientes'),
-    h('ul',{class:'recent'},sorted().slice(0,5).map(l=>h('li',{},h('a',{href:'#lecciones',onclick:()=>{S.open=l.id}},h('span',{},l.title),h('small',{},l.projectName||l.project))))));
+    h('ul',{class:'recent'},sorted().slice(0,5).map(l=>h('li',{},h('a',{href:'#leccion/'+encodeURIComponent(l.id)},h('span',{},l.title),h('small',{},l.projectName||l.project))))));
   root.append(h('div',{class:'grid2'},next,byProject),h('div',{style:'margin-top:14px'},recent));
   return root;
 }
@@ -511,20 +565,79 @@ function filterBar(){
     h('div',{class:'filters'},areas.map(a=>h('button',{class:'chip',type:'button','aria-pressed':String(S.filters.area===a),onclick:()=>{S.filters.area=a;render();}},a))),
     h('div',{class:'filters'},states.map(s=>h('button',{class:'chip',type:'button','aria-pressed':String(S.filters.state===s),onclick:()=>{S.filters.state=s;render();}},s==='todos'?'todos los estados':STATE_LABEL[s]))));
 }
-const filtered=()=>sorted().filter(l=>l.id===S.open||((S.filters.project==='todos'||l.project===S.filters.project)&&(S.filters.area==='todas'||l.area===S.filters.area)&&(S.filters.state==='todos'||stateOf(l)===S.filters.state)&&(S.filters.kind==='todos'||l.kind===S.filters.kind)&&(S.filters.lang==='todos'||(l.languages||[]).includes(S.filters.lang))));
-function viewLecciones(){
-  const root=h('div',{style:'padding-top:12px'});
-  root.append(h('h2',{},'Lecciones'),h('p',{class:'sub'},'Agrupadas por proyecto y commit.'));
-  if(!S.lessons.length){root.append(emptyState());return root;}
-  root.append(filterBar());
+const filtered=()=>sorted().filter(l=>(S.filters.project==='todos'||l.project===S.filters.project)&&(S.filters.area==='todas'||l.area===S.filters.area)&&(S.filters.state==='todos'||stateOf(l)===S.filters.state)&&(S.filters.kind==='todos'||l.kind===S.filters.kind)&&(S.filters.lang==='todos'||(l.languages||[]).includes(S.filters.lang)));
+async function setFeedMode(mode){
+  if(!FEED_MODES.includes(mode)||S.feedMode===mode)return;
+  S.feedMode=mode;S.modeTouched=true;lsSet(LS_FEED,mode);render();
+  if(S.db&&S.uid){
+    try{await S.db.collection('data/users/'+S.uid).doc('prefs').set({feedMode:mode,updatedAt:Date.now()});}
+    catch(e){/* the choice still lives in this browser */}
+  }
+}
+function modeToggle(){
+  const b=(m,t)=>h('button',{class:'chip',type:'button','aria-pressed':String(S.feedMode===m),onclick:()=>setFeedMode(m)},t);
+  return h('div',{class:'seg',role:'group','aria-label':'Cómo ver las lecciones'},b('lecciones','Lecciones'),b('proyectos','Proyectos'));
+}
+function lessonFeed(){
+  const box=h('div');
+  box.append(filterBar());
   const list=filtered();
-  if(!list.length){root.append(h('div',{class:'empty'},h('b',{},'Nada con esos filtros'),'Cambia el proyecto, el área o el estado.'));return root;}
+  if(!list.length){box.append(h('div',{class:'empty'},h('b',{},'Nada con esos filtros'),'Cambia el proyecto, el área o el estado.'));return box;}
   let last='';
   list.forEach(l=>{
     const key=(l.projectName||l.project)+'|'+(l.commit&&l.commit.hash);
-    if(key!==last){last=key;root.append(h('div',{class:'group'},h('b',{},l.projectName||l.project),' · ',(l.commit&&l.commit.hash)||'sin commit',' · ',(l.commit&&l.commit.message)||''));}
-    root.append(lessonItem(l));
+    if(key!==last){last=key;box.append(h('div',{class:'group'},h('b',{},l.projectName||l.project),' · ',(l.commit&&l.commit.hash)||'sin commit',' · ',(l.commit&&l.commit.message)||''));}
+    box.append(lessonCard(l));
   });
+  return box;
+}
+const tally=(arr)=>{const m=new Map();arr.forEach(x=>m.set(x,(m.get(x)||0)+1));return [...m.entries()].sort((a,b)=>b[1]-a[1]).map(e=>e[0]);};
+const shortDate=(iso)=>{const d=new Date(iso);return isNaN(d)?'':d.toLocaleDateString('es',{day:'numeric',month:'short',year:'numeric'});};
+function projectInfo(p){
+  const lessons=[...p.lessons].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+  const counts={nuevo:0,aprendiendo:0,oxidado:0,dominado:0};
+  lessons.forEach(l=>counts[stateOf(l)]++);
+  const withIntro=lessons.find(l=>l.intro&&l.intro.project);
+  const concepts=[...new Set(lessons.map(l=>{const id=resolveNode(l.id);return id?NODE_BY_ID.get(id).title:l.title;}))];
+  return{name:p.name,lessons,counts,
+    kind:tally(lessons.map(l=>l.kind).filter(Boolean))[0]||'',
+    langs:tally(lessons.flatMap(l=>l.languages||[])).slice(0,3),
+    fws:tally(lessons.flatMap(l=>l.frameworks||[])).slice(0,3),
+    about:withIntro?withIntro.intro.project:'',
+    concepts,commits:new Set(lessons.map(l=>l.commit&&l.commit.hash)).size,last:lessons[0].createdAt};
+}
+function projectCard(p){
+  const total=p.lessons.length,c=p.counts,MAXT=6;
+  const art=h('article',{class:'pcard'});
+  art.append(h('div',{class:'pc-head'},h('h3',{},p.name),p.kind?h('span',{class:'tag'},KIND_LABEL[p.kind]||p.kind):null,
+    p.langs.map(x=>h('span',{class:'tag'},x)),p.fws.map(x=>h('span',{class:'tag'},x))));
+  if(p.about)art.append(h('p',{class:'pc-about'},p.about));
+  art.append(h('div',{class:'pc-stats'},
+    [[total,total===1?'lección':'lecciones'],[p.commits,p.commits===1?'commit':'commits'],[c.nuevo,'por estudiar'],[c.oxidado,'para repasar'],[c.dominado,'dominadas']]
+      .map(([n,t])=>h('div',{},h('b',{},String(n)),h('span',{},t)))));
+  art.append(h('div',{class:'bar',role:'img','aria-label':`${p.name}: ${c.dominado} de ${total} dominadas`},
+    Object.keys(c).map(k=>h('i',{style:`width:${c[k]/total*100}%;background:${STATE_COLOR[k]}`}))));
+  art.append(h('div',{class:'label',style:'margin-top:4px'},'Lo que se aprende'),
+    h('div',{class:'tags'},p.concepts.slice(0,MAXT).map(t=>h('span',{class:'tag concept',title:t},t)),
+      p.concepts.length>MAXT?h('span',{class:'tag'},`+${p.concepts.length-MAXT} más`):null));
+  art.append(h('details',{},h('summary',{},`Ver ${total===1?'la lección':'las '+total+' lecciones'}`),
+    h('ul',{class:'pc-lessons'},p.lessons.map(l=>h('li',{},h('a',{href:'#leccion/'+encodeURIComponent(l.id)},h('span',{},l.title),h('span',{class:'pill '+stateOf(l)},STATE_LABEL[stateOf(l)])))))));
+  const when=shortDate(p.last);
+  if(when)art.append(h('p',{class:'note'},'Última lección: '+when));
+  return art;
+}
+function projectStack(){
+  const cards=Object.values(projectsOf()).map(projectInfo).sort((a,b)=>String(b.last).localeCompare(String(a.last)));
+  return h('div',{class:'pstack'},cards.map(projectCard));
+}
+function viewLecciones(){
+  const root=h('div',{style:'padding-top:12px'});
+  const byProject=S.feedMode==='proyectos';
+  root.append(h('div',{class:'viewhead'},
+    h('div',{},h('h2',{},byProject?'Proyectos':'Lecciones'),h('p',{class:'sub'},byProject?'Cada repo con lo que has aprendido en él.':'Agrupadas por proyecto y commit.')),
+    modeToggle()));
+  if(!S.lessons.length){root.append(emptyState());return root;}
+  root.append(byProject?projectStack():lessonFeed());
   return root;
 }
 function viewRepaso(){
@@ -547,7 +660,7 @@ function viewConceptos(){
   root.append(h('div',{class:'scroll'},h('table',{},
     h('thead',{},h('tr',{},['Concepto','Ámbito','Área','Estado','Proyectos'].map(t=>h('th',{},t)))),
     h('tbody',{},rows.map(l=>h('tr',{},
-      h('td',{},h('a',{href:'#lecciones',onclick:()=>{S.open=l.id;S.filters={project:'todos',area:'todas',state:'todos',kind:'todos',lang:'todos'}}},l.title),h('div',{class:'file'},l.id)),
+      h('td',{},h('a',{href:'#leccion/'+encodeURIComponent(l.id)},l.title),h('div',{class:'file'},l.id)),
       h('td',{},scopeText(l)||'—'),h('td',{},l.area),h('td',{},h('span',{class:'pill '+stateOf(l)},STATE_LABEL[stateOf(l)])),h('td',{class:'mono'},String(appearancesOf(l)))))))));
   return root;
 }
@@ -842,7 +955,7 @@ function mapPanel(map){
   const unlocks=[...map.nodes.values()].filter(x=>x.requires.includes(n.id));
   if(unlocks.length)root.append(h('div',{class:'label'},'Te abre el camino a'),h('div',{class:'nodelist'},unlocks.map(x=>chip(x.id))));
   if(n.lessons.length){
-    root.append(h('div',{class:'label'},'Tus lecciones'),h('div',{class:'nodelist'},n.lessons.map(l=>h('button',{class:'chip',type:'button',onclick:()=>{S.open=l.id;location.hash='#lecciones';}},l.title))));
+    root.append(h('div',{class:'label'},'Tus lecciones'),h('div',{class:'nodelist'},n.lessons.map(l=>h('button',{class:'chip',type:'button',onclick:()=>{location.hash='#leccion/'+encodeURIComponent(l.id);}},l.title))));
   }else{
     root.append(h('p',{class:'note',style:'margin-top:12px'},n.state==='frontera'?'Es lo siguiente que puedes aprender. Aparecerá en tus lecciones cuando un commit lo use.':n.state==='conocido'?'Lo marcaste en el diagnóstico. Si un commit lo usa, aparecerá en tus lecciones.':'Aún no hay camino hasta aquí. Se abre cuando conozcas lo que lo precede.'));
   }
@@ -889,12 +1002,13 @@ function viewMapa(){
 }
 
 /* ---------- shell ---------- */
-const VIEWS={inicio:viewInicio,lecciones:viewLecciones,repaso:viewRepaso,conceptos:viewConceptos,mapa:viewMapa,perfil:viewPerfil};
+const VIEWS={inicio:viewInicio,lecciones:viewLecciones,leccion:viewLeccion,repaso:viewRepaso,conceptos:viewConceptos,mapa:viewMapa,perfil:viewPerfil};
 function route(){
   const hash=(location.hash||'').slice(1);
   if(S.progressLoaded&&S.uid&&!S.profile&&!S.skipSetup&&hash!=='instalar')return 'perfil';
   if(hash==='instalar')return 'inicio';
-  return VIEWS[hash]?hash:'inicio';
+  const view=hash.split('/')[0];
+  return VIEWS[view]?view:'inicio';
 }
 function paintToast(){const t=document.getElementById('toast');t.replaceChildren(S.toast?h('div',{class:'toast',role:'alert'},S.toast):'');}
 function render(){
@@ -903,11 +1017,11 @@ function render(){
   const due=S.lessons.filter(l=>stateOf(l)==='oxidado').length;
   const nav=document.getElementById('nav');
   nav.replaceChildren(...[['inicio','Inicio',null],['lecciones','Lecciones',null],['repaso','Repaso',due||null],['conceptos','Conceptos',null],['mapa','Mapa',null],['perfil','Perfil',null]].map(([id,label,n])=>
-    h('a',{href:'#'+id,'aria-current':cur===id?'page':null},label,n?h('span',{class:'n'},String(n)):null)));
+    h('a',{href:'#'+id,'aria-current':(cur===id||(id==='lecciones'&&cur==='leccion'))?'page':null},label,n?h('span',{class:'n'},String(n)):null)));
   document.getElementById('view').replaceChildren(VIEWS[cur]());
   paintToast();
 }
-window.addEventListener('hashchange',()=>{S.toast='';render();if(location.hash==='#instalar'){const e=document.getElementById('instalar');if(e)e.scrollIntoView();}});
+window.addEventListener('hashchange',()=>{S.toast='';render();if(location.hash==='#instalar'){const e=document.getElementById('instalar');if(e)e.scrollIntoView();}else window.scrollTo(0,0);});
 
 async function boot(){
   render();
@@ -926,9 +1040,10 @@ async function boot(){
   },fail);
   if(S.uid){
     db.collection('data/users/'+S.uid).onSnapshot((snap)=>{
-      const p={};let prof=null;
-      snap.docs.forEach(d=>{if(d.id.startsWith('p_'))p[d.id.slice(2)]=d.data();else if(d.id==='profile')prof=d.data();});
+      const p={};let prof=null,prefs=null;
+      snap.docs.forEach(d=>{if(d.id.startsWith('p_'))p[d.id.slice(2)]=d.data();else if(d.id==='profile')prof=d.data();else if(d.id==='prefs')prefs=d.data();});
       S.progress=p;S.progressLoaded=true;
+      if(prefs&&!S.modeTouched&&FEED_MODES.includes(prefs.feedMode)){S.feedMode=prefs.feedMode;lsSet(LS_FEED,prefs.feedMode);}
       if(prof){S.profile=prof;if(!S.draft||S.saved)S.draft=null;}
       render();
     },()=>{S.progressLoaded=true;render();});

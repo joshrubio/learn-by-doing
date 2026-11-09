@@ -6,7 +6,7 @@ Most of your code will be written by AI. What you need is the ability to read it
 
 Nothing interrupts your work. The lessons wait until you open the study space.
 
-> Status: prototype (v0.6.3). The study space is in Spanish for now.
+> Status: prototype (v0.7.0). The study space is in Spanish for now.
 
 ## Requirements
 
@@ -79,6 +79,11 @@ appearances: ["other-repo@7d1e0aa@2026-11-08"]
 ---
 # Why the route does not talk to the database directly
 
+## Introducción
+- **El proyecto:** ...
+- **Dónde está el cambio:** ...
+### Mapa
+(optional ASCII diagram)
 ## Contexto
 - **Qué se construía:** ...
 ## Código
@@ -124,13 +129,14 @@ Lessons attach to the map by their concept name. The hook tells Claude which cat
 
 ## Every lesson has the same shape
 
-Context, predict, concept, one exercise, result.
+Introduction, context, predict, concept, one exercise, result. Each lesson has its own page.
 
-1. **Context.** Which project, what was being built, and what you are about to learn. Before any code.
-2. **Predict.** You commit to a guess before reading the explanation.
-3. **Concept.** A short mental model, not a definition.
-4. **Exercise.** Exactly one, always from the kinds you chose.
-5. **Result.** Right, partly right or not yet. It feeds the spaced review.
+1. **Introduction.** What the repo is, where in it the change lives and, when the change spans several pieces, a small ASCII map of what was done. It places you in the project before any code, even weeks after the commit. Lessons saved before 0.7.0 have no introduction and simply start at the context.
+2. **Context.** What was being built and what you are about to learn.
+3. **Predict.** You commit to a guess before reading the explanation.
+4. **Concept.** A short mental model, not a definition.
+5. **Exercise.** Exactly one, always from the kinds you chose.
+6. **Result.** Right, partly right or not yet. It feeds the spaced review. "Continuar" takes you back to the lessons.
 
 Only the exercise changes between lessons, so the method always feels the same.
 
@@ -151,7 +157,7 @@ Open exercises are graded against key points by Claude, using the Artifact's ask
 ## What you get in the study space
 
 - **Inicio**: what the tool is, a small dashboard (lessons, to study, to review, mastered, progress per project, recent lessons) and these install instructions.
-- **Lecciones**: filter by project, area and state, grouped by commit.
+- **Lecciones**: a switch at the side of the title alternates two views, and the study space remembers the last one you used. By lesson, with filters by project, kind, language, area and state, grouped by commit. By project, a vertical stack of cards with the project's kind, languages, number of lessons and commits, progress, tags of what you learn in it and the list of its lessons. Every lesson opens on its own page.
 - **Repaso**: spaced review with intervals of 1, 3, 7, 16 and 35 days. A concept you got wrong goes back to the start; a partly right one stays where it is.
 - **Conceptos**: everything you have seen, with its state and in how many projects it appeared. A concept has one state, shared by all your projects.
 - **Mapa**: a map of what you have discovered, what is next to it and what is unexplored (see "The map" above).

@@ -66,6 +66,16 @@ function lessonToMarkdown(l) {
   };
   const out = [];
   out.push(`# ${oneLine(l.title)}\n`);
+  if (l.intro) {
+    out.push('## Introducción\n');
+    out.push(`- **El proyecto:** ${oneLine(l.intro.project)}`);
+    out.push(`- **Dónde está el cambio:** ${oneLine(l.intro.where)}\n`);
+    if (l.intro.diagram) {
+      const f = fenceFor(l.intro.diagram);
+      out.push('### Mapa\n');
+      out.push(`${f}text\n${l.intro.diagram}\n${f}\n`);
+    }
+  }
   out.push('## Contexto\n');
   out.push(`- **Qué se construía:** ${oneLine(l.context.building)}`);
   out.push(`- **Qué hace este fragmento:** ${oneLine(l.context.snippetRole)}`);
@@ -137,11 +147,18 @@ function markdownToLesson(text) {
   const titleLine = sections[0].lines.find((l) => /^# /.test(l));
   if (!titleLine) return { error: 'missing "# title"' };
   const sec = (name) => (sections.find((s) => s.heading === name) || {}).lines;
-  const ctx = sec('Contexto'), code = sec('Código'), pred = sec('Predice'), expl = sec('Concepto'), ex = sec('Ejercicio'), rel = sec('Relacionado');
+  const ctx = sec('Contexto'), code = sec('Código'), pred = sec('Predice'), expl = sec('Concepto'), ex = sec('Ejercicio'), rel = sec('Relacionado'), introLines = sec('Introducción');
   if (!ctx || !code || !pred || !expl || !ex) return { error: 'missing one of: Contexto, Código, Predice, Concepto, Ejercicio' };
 
-  const field = (label) => { const m = ctx.map((l) => new RegExp(`^- \\*\\*${label}:\\*\\* (.*)$`).exec(l)).find(Boolean); return m ? m[1].trim() : ''; };
+  const field = (label, from = ctx) => { const m = from.map((l) => new RegExp(`^- \\*\\*${label}:\\*\\* (.*)$`).exec(l)).find(Boolean); return m ? m[1].trim() : ''; };
   const context = { building: field('Qué se construía'), snippetRole: field('Qué hace este fragmento'), learning: field('Qué aprenderás') };
+  let intro = null;
+  if (introLines) {
+    const map = takeCode(introLines);
+    intro = { project: field('El proyecto', introLines), where: field('Dónde está el cambio', introLines) };
+    if (map && map.code.text.trim()) intro.diagram = map.code.text;
+    if (!intro.project && !intro.where && !intro.diagram) intro = null;
+  }
   const lessonCode = takeCode(code);
   if (!lessonCode) return { error: 'missing code block under "Código"' };
 
@@ -174,6 +191,7 @@ function markdownToLesson(text) {
       projectName: data.projectName || data.project || '',
       commit: { hash: data.commit || '', message: data.commitMessage || '', date: data.commitDate || '' },
       context,
+      intro,
       type: data.type,
       area: data.area,
       scope: data.scope || '',

@@ -10,6 +10,8 @@ const TOOLING = new Set(['vite', 'tailwind', 'prisma', 'vitest', 'jest', 'playwr
 const TYPES = ['concepto', 'decision', 'riesgo', 'lectura'];
 const AREAS = ['frontend', 'backend', 'base-de-datos', 'tests', 'config', 'codigo', 'docs', 'otros'];
 const MAX_PER_COMMIT = 4;
+const MAX_DIAGRAM_ROWS = 16;
+const MAX_DIAGRAM_COLS = 64;
 const BATCH = 40;
 const LOW_SIGNAL = /(^|\/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb|Cargo\.lock|poetry\.lock|dist|build|node_modules|\.next)(\/|$)|\.(min\.js|map|svg|png|jpe?g|gif|ico|woff2?)$/i;
 
@@ -58,6 +60,16 @@ function validate(l, i) {
   for (const k of ['title', 'predict', 'explain']) if (!str(l[k])) errs.push(`${k} is required`);
   const x = l.context;
   if (!x || !str(x.building) || !str(x.snippetRole) || !str(x.learning)) errs.push('context.building, context.snippetRole and context.learning are required');
+  const n = l.intro;
+  if (!n || !str(n.project) || !str(n.where)) errs.push('intro.project (what the repo is) and intro.where (where in it the change lives) are required');
+  else if (n.diagram !== undefined && n.diagram !== null) {
+    if (!str(n.diagram)) errs.push('intro.diagram must be a non-empty string when present, or left out');
+    else {
+      const rows = n.diagram.replace(/\s+$/, '').split('\n');
+      if (rows.length > MAX_DIAGRAM_ROWS) errs.push(`intro.diagram has ${rows.length} lines, keep it to ${MAX_DIAGRAM_ROWS} or fewer`);
+      if (rows.some((r) => r.length > MAX_DIAGRAM_COLS)) errs.push(`intro.diagram has a line wider than ${MAX_DIAGRAM_COLS} characters, it would not fit on a phone`);
+    }
+  }
   if (!l.code || !str(l.code.text)) errs.push('code.text is required');
   else if (l.code.text.split('\n').length > 20) errs.push('code.text is longer than 20 lines, keep only the lines that matter');
   errs.push(...validateExercise(l.exercise));
@@ -113,6 +125,12 @@ function tagsFor(l, det, kindOverride, repoDir) {
   return { kind: kindOverride || pkg.kind, languages, frameworks, errs };
 }
 
+function cleanIntro(n) {
+  const out = { project: n.project.trim(), where: n.where.trim() };
+  if (str(n.diagram)) out.diagram = n.diagram.replace(/\s+$/, '');
+  return out;
+}
+
 function cleanExercise(e) {
   const out = { modality: e.modality, prompt: e.prompt };
   if (e.code) out.code = { file: (e.code.file || '').toString(), text: e.code.text };
@@ -164,7 +182,7 @@ async function add() {
       id: l.concept, createdAt: now, project: proj.slug, projectName: proj.name,
       commit: { hash: commit.hash || '', message: commit.message || '', date: commit.date || '' },
       scope: l.scope, kind: tagged[i].kind, languages: tagged[i].languages, frameworks: tagged[i].frameworks,
-      context: l.context, type: l.type, area: l.area, title: l.title, code: { file: (l.code.file || '').toString(), text: l.code.text },
+      context: l.context, intro: cleanIntro(l.intro), type: l.type, area: l.area, title: l.title, code: { file: (l.code.file || '').toString(), text: l.code.text },
       predict: l.predict, explain: l.explain, exercise: cleanExercise(l.exercise),
       related: Array.isArray(l.related) ? l.related.filter(str) : [], appearances: [], example: l.example === true,
     }));
