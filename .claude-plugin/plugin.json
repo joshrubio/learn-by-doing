@@ -1,6 +1,7 @@
 {
   "name": "learn-by-doing",
-  "version": "0.6.2",
+  "version": "0.6.3",
+  "mcpServers": "./.claude-plugin/mcp.json",
   "description": "Turns every git commit Claude makes into short lessons you study later in your own study space.",
   "author": { "name": "Joshue Rubio", "url": "https://github.com/joshrubio" },
   "homepage": "https://github.com/joshrubio/learn-by-doing",
